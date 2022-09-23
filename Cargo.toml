@@ -1,0 +1,12 @@
+[package]
+name = "scarab_engine"
+description = "A low-physics 2D game engine for rust"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["dylib"]
+edition = "2021"
+
+[dependencies]
