@@ -3,11 +3,6 @@ name = "scarab_engine"
 description = "A low-physics 2D game engine for rust"
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
-
-[lib]
-crate-type = ["dylib"]
-edition = "2021"
 
 [dependencies]
 piston = "0.53.0"
@@ -15,3 +10,11 @@ piston2d-graphics = "0.42.0"
 pistoncore-glutin_window = "0.69.0"
 piston2d-opengl_graphics = "0.81.0"
 thiserror = "1.0"
+
+[lib]
+crate-type = ["rlib"]
+edition = "2021"
+
+[[bin]]
+name = "scarab_example"
+path = "src/main.rs"
