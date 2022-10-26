@@ -39,8 +39,11 @@ impl<N: VecNum> Entity<N> {
         let mut new_box = self.physbox.clone();
         new_box.set_pos(new_pos);
 
-        if self.physbox.is_fully_contained(&cell.get_box().convert_n()) {
-            if new_box.is_fully_contained(&cell.get_box().convert_n())
+        if self
+            .physbox
+            .is_fully_contained_by(&cell.get_box().convert_n())
+        {
+            if new_box.is_fully_contained_by(&cell.get_box().convert_n())
             /*||
             edge to be crossed is passable */
             {
@@ -71,16 +74,16 @@ impl<N: VecNum> Entity<N> {
     }
 }
 
-impl Default for Entity<f64> {
-    fn default() -> Self {
-        Self {
-            physbox: PhysBox::new(0.0, 0.0, 1.0, 1.0),
+impl Entity<f64> {
+    pub fn new_def() -> ScarabResult<Self> {
+        Ok(Self {
+            physbox: PhysBox::new((0.0, 0.0), (1.0, 1.0))?,
             color: [0.0, 1.0, 1.0, 1.0],
             health: Health::new(10),
             solidity: SOLID,
             current_cell: None,
             field: None,
-        }
+        })
     }
 }
 

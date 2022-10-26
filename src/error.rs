@@ -10,4 +10,6 @@ pub enum ScarabError {
     Unknown,
     #[error("{0}")]
     RawString(String),
+    #[error("PhysBox sizes must be greater than 0")]
+    PhysBoxSize,
 }
