@@ -51,15 +51,15 @@ impl<N: VecNum> TileVec<N> {
 
 impl<N: VecNum> From<TileVec<N>> for (N, N) {
     fn from(val: TileVec<N>) -> (N, N) {
-        (val.x(), val.y())
+        (val.x, val.y)
     }
 }
 
 impl<N: VecNum> Add<TileVec<N>> for TileVec<N> {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
-        let x = self.x() + rhs.x();
-        let y = self.y() + rhs.y();
+        let x = self.x + rhs.x;
+        let y = self.y + rhs.y;
         Self::new(x, y)
     }
 }
@@ -67,8 +67,8 @@ impl<N: VecNum> Add<TileVec<N>> for TileVec<N> {
 impl<N: VecNum> Sub<TileVec<N>> for TileVec<N> {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
-        let x = self.x() - rhs.x();
-        let y = self.y() - rhs.y();
+        let x = self.x - rhs.x;
+        let y = self.y - rhs.y;
         Self::new(x, y)
     }
 }
@@ -77,6 +77,25 @@ impl<N: VecNum> Mul<N> for TileVec<N> {
     type Output = Self;
     fn mul(self, rhs: N) -> Self::Output {
         Self::new(self.x * rhs, self.y * rhs)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BoxEdge {
+    Top,
+    Left,
+    Bottom,
+    Right,
+}
+
+impl BoxEdge {
+    pub fn opposite(&self) -> BoxEdge {
+        match self {
+            Self::Top => Self::Bottom,
+            Self::Left => Self::Right,
+            Self::Bottom => Self::Top,
+            Self::Right => Self::Left,
+        }
     }
 }
 
@@ -123,24 +142,90 @@ impl<N: VecNum> PhysBox<N> {
         Ok(())
     }
 
-    pub fn left_x(&self) -> N {
-        self.pos.x()
-    }
-
-    pub fn right_x(&self) -> N {
-        self.pos.x() + self.size.x()
-    }
-
     pub fn top_y(&self) -> N {
-        self.pos.y()
+        self.pos.y
+    }
+
+    pub fn left_x(&self) -> N {
+        self.pos.x
     }
 
     pub fn bottom_y(&self) -> N {
-        self.pos.y() + self.size.y()
+        self.pos.y + self.size.y
+    }
+
+    pub fn right_x(&self) -> N {
+        self.pos.x + self.size.x
+    }
+
+    pub fn set_top_y(&mut self, val: N) -> ScarabResult<()> {
+        let old = self.pos;
+        self.pos.y = val;
+        Self::validate(self.pos.into(), self.size().into()).or_else(|e| {
+            self.pos = old;
+            Err(e)
+        })?;
+        Ok(())
+    }
+
+    pub fn set_left_x(&mut self, val: N) -> ScarabResult<()> {
+        let old = self.pos;
+        self.pos.x = val;
+        Self::validate(self.pos.into(), self.size().into()).or_else(|e| {
+            self.pos = old;
+            Err(e)
+        })?;
+        Ok(())
+    }
+
+    pub fn set_bottom_y(&mut self, val: N) -> ScarabResult<()> {
+        let old = self.pos;
+        self.pos.y = val - self.size.y();
+        Self::validate(self.pos.into(), self.size().into()).or_else(|e| {
+            self.pos = old;
+            Err(e)
+        })?;
+        Ok(())
+    }
+
+    pub fn set_right_x(&mut self, val: N) -> ScarabResult<()> {
+        let old = self.pos;
+        self.pos.x = val - self.size.x;
+        Self::validate(self.pos.into(), self.size().into()).or_else(|e| {
+            self.pos = old;
+            Err(e)
+        })?;
+        Ok(())
     }
 
     pub fn area(&self) -> N {
-        self.size.x() * self.size.y()
+        self.size.x * self.size.y
+    }
+
+    /// Gets the corresponding coordinate for the given edge of the box.
+    /// i.e. top/bottom give their respective y's; left/right give their respective x's
+    pub fn get_edge(&self, edge: BoxEdge) -> N {
+        match edge {
+            BoxEdge::Top => self.top_y(),
+            BoxEdge::Left => self.left_x(),
+            BoxEdge::Bottom => self.bottom_y(),
+            BoxEdge::Right => self.right_x(),
+        }
+    }
+
+    /// Moves `self` so that `self.get_edge(edge) == val`
+    pub fn set_edge(&mut self, val: N, edge: BoxEdge) -> ScarabResult<()> {
+        match edge {
+            BoxEdge::Top => self.set_top_y(val),
+            BoxEdge::Left => self.set_left_x(val),
+            BoxEdge::Bottom => self.set_bottom_y(val),
+            BoxEdge::Right => self.set_right_x(val),
+        }
+    }
+
+    /// Moves `self` so that its `edge` coincides with `other`s `edge`
+    pub fn set_touching_edge(&mut self, other: &Self, edge: BoxEdge) -> ScarabResult<()> {
+        self.set_edge(other.get_edge(edge), edge)
     }
 
     /// For clarity this uses >= and <
@@ -148,29 +233,29 @@ impl<N: VecNum> PhysBox<N> {
     /// with the bottom left and top right corners also excluded.
     pub fn contains_pos(&self, pos: TileVec<N>) -> bool {
         let bottom_right = self.pos + self.size;
-        (pos.x() >= self.pos().x())
-            && (pos.x() < bottom_right.x())
-            && (pos.y() >= self.pos().y())
-            && (pos.y() < bottom_right.y())
+        (pos.x >= self.pos.x)
+            && (pos.x < bottom_right.x)
+            && (pos.y >= self.pos.y)
+            && (pos.y < bottom_right.y)
     }
 
     /// Is the pos contained in the box, (with all edges included)
     fn contains_pos_inclusive(&self, pos: TileVec<N>) -> bool {
         let bottom_right = self.pos + self.size;
-        (pos.x() >= self.pos().x())
-            && (pos.x() <= bottom_right.x())
-            && (pos.y() >= self.pos().y())
-            && (pos.y() <= bottom_right.y())
+        (pos.x >= self.pos.x)
+            && (pos.x <= bottom_right.x)
+            && (pos.y >= self.pos.y)
+            && (pos.y <= bottom_right.y)
     }
 
     /// For clarity this uses < and > not <= and >=
     pub fn has_overlap(&self, other: &Self) -> bool {
         let this_bottom_right = self.pos + self.size;
         let other_bottom_right = other.pos + other.size;
-        (other_bottom_right.x() > self.pos().x())
-            && (other.pos().x() < this_bottom_right.x())
-            && (other_bottom_right.y() > self.pos().y())
-            && (other.pos().y() < this_bottom_right.y())
+        (other_bottom_right.x > self.pos.x)
+            && (other.pos.x < this_bottom_right.x)
+            && (other_bottom_right.y > self.pos.y)
+            && (other.pos.y < this_bottom_right.y)
     }
 
     /// Is `self` fully contained within `other`
@@ -178,6 +263,34 @@ impl<N: VecNum> PhysBox<N> {
     /// i.e. in set notation `a.is_fully_contained_by(&b)` means that $a \subset b$
     pub fn is_fully_contained_by(&self, other: &Self) -> bool {
         other.contains_pos_inclusive(self.pos) && other.contains_pos_inclusive(self.pos + self.size)
+    }
+
+    /// Returns a list of the edges of `self` that `other` touches.
+    /// (todo: test) Will be empty iff `other` is fully contained by `self` or they have no overlap
+    pub fn edges_crossed_by(&self, other: &Self) -> Vec<BoxEdge> {
+        if !self.has_overlap(other) || other.is_fully_contained_by(self) {
+            return vec![];
+        }
+        let this_bottom_right = self.pos + self.size;
+        let other_bottom_right = other.pos + other.size;
+        let mut edges = Vec::with_capacity(4);
+
+        if other.pos.y < self.pos.y && other_bottom_right.y > self.pos.y {
+            edges.push(BoxEdge::Top);
+        }
+        if other.pos.x < self.pos.x && other_bottom_right.x > self.pos.x {
+            edges.push(BoxEdge::Left);
+        }
+        if other.pos.y < this_bottom_right.y && other_bottom_right.y > this_bottom_right.y {
+            edges.push(BoxEdge::Bottom);
+        }
+        if other.pos.x < this_bottom_right.x && other_bottom_right.x > this_bottom_right.x {
+            edges.push(BoxEdge::Right);
+        }
+
+        println!("{edges:?}");
+
+        edges
     }
 
     // Directly implementing `From<Vec2<N>> for Vec2<M>` produces a conflicting
@@ -191,6 +304,18 @@ impl<N: VecNum> PhysBox<N> {
             pos: self.pos.convert_n(),
             size: self.size.convert_n(),
         }
+    }
+}
+
+impl<N: VecNum> HasBox<N> for PhysBox<N> {
+    fn get_box(&self) -> &PhysBox<N> {
+        self
+    }
+}
+
+impl<N: VecNum> HasBoxMut<N> for PhysBox<N> {
+    fn get_box_mut(&mut self) -> &mut PhysBox<N> {
+        self
     }
 }
 

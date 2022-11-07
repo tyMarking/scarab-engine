@@ -12,4 +12,6 @@ pub enum ScarabError {
     RawString(String),
     #[error("PhysBox sizes must be greater than 0")]
     PhysBoxSize,
+    #[error("Field positions must be positive")]
+    FieldPosition,
 }

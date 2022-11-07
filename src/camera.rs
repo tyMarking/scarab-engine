@@ -59,6 +59,4 @@ impl Camera {
         }
         Ok(())
     }
-
-    // Next step .... slice of box?
 }

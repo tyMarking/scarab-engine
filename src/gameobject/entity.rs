@@ -9,6 +9,7 @@ use crate::{
     Color, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, TileVec, VecNum,
 };
 
+#[derive(Debug)]
 pub struct Entity<N: VecNum> {
     physbox: PhysBox<N>,
     color: Color,
@@ -29,41 +30,48 @@ impl<N: VecNum> Entity<N> {
             .as_ref()
             .ok_or_else(|| ScarabError::RawString("can't move without a field set".to_string()))?;
 
+        if !self.current_cell.is_some() {
+            self.current_cell = f.cell_at(self.physbox.pos())?;
+        }
         let cell = self
             .current_cell
             .as_ref()
-            .map_or_else(|| f.cell_at(self.physbox.pos()), |c| Some(Arc::clone(&c)))
             .ok_or_else(|| ScarabError::RawString("can't find current cell".to_string()))?;
 
         let new_pos = self.physbox.pos() + direction;
         let mut new_box = self.physbox.clone();
-        new_box.set_pos(new_pos);
+        new_box.set_pos(new_pos)?;
 
-        if self
-            .physbox
-            .is_fully_contained_by(&cell.get_box().convert_n())
-        {
-            if new_box.is_fully_contained_by(&cell.get_box().convert_n())
-            /*||
-            edge to be crossed is passable */
-            {
-                // We can just set the new position
-                self.physbox.set_pos(new_pos);
-            } else {
-                // We go up to the edge
-                return Err(ScarabError::RawString(
-                    "movement case not implemented".to_string(),
-                ));
-            }
+        if new_box.is_fully_contained_by(&cell.get_box().convert_n()) {
+            // We can just set the new position
+            self.physbox.set_pos(new_pos)?;
         } else {
-            return Err(ScarabError::RawString(
-                "movement case not implemented".to_string(),
-            ));
-            // if true /*&& the edge being crossed is passable */ {
+            let neighbors = cell.neighbors_overlapped(&new_box)?;
+            println!("{neighbors:?}");
+            for (edge, neighbor) in &neighbors {
+                if !cell.get_solidity().exit_edge(*edge)
+                    || !neighbor.get_solidity().enter_edge(*edge)
+                {
+                    new_box.set_touching_edge(&cell.get_box().convert_n(), *edge)?;
+                }
+            }
 
-            // } else {
-
-            // }
+            if neighbors.len() == 0 {
+                let edges = cell.get_box().convert_n().edges_crossed_by(&new_box);
+                for edge in edges {
+                    if !cell.get_solidity().exit_edge(edge) {
+                        new_box.set_touching_edge(&cell.get_box().convert_n(), edge)?;
+                    }
+                }
+            }
+            self.physbox = new_box;
+            // TODO: having to recalculate the current cell every time will get time intensive
+            // Should create a new function to take into account the old current cell and its neighbors
+            // at the very least only going through those. Even more so, we can add the edges that were
+            // crossed.
+            if !cell.get_box().convert_n().contains_pos(new_box.pos()) {
+                self.current_cell = f.cell_at(new_box.pos())?;
+            }
         }
 
         Ok(())
