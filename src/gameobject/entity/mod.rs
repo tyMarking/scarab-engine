@@ -135,13 +135,13 @@ struct EntityModel<N: VecNum> {
     physbox: PhysBox<N>,
     health: Health,
     solidity: Solidity,
-    current_cell: Option<Arc<Cell>>,
+    current_cell: Option<(Arc<Cell>, Vec<Arc<Cell>>)>,
     field: Option<Arc<Field>>,
 }
 
 impl<N: VecNum> EntityModel<N> {
     fn current_cell(&self) -> Option<&Arc<Cell>> {
-        self.current_cell.as_ref()
+        self.current_cell.as_ref().map(|(c, o)| c)
     }
 
     fn update(&mut self, dt: f64) -> ScarabResult<()> {
@@ -156,10 +156,28 @@ impl<N: VecNum> EntityModel<N> {
             .as_ref()
             .ok_or_else(|| ScarabError::RawString("can't move without a field set".to_string()))?;
 
-        if !self.current_cell.is_some() {
-            self.current_cell = f.cell_at(self.physbox.pos())?;
+        if self.velocity == TileVec::zero() {
+            return Ok(());
         }
-        let cell = self
+
+        // TODO: having to recalculate the current cell every time will get time intensive
+        // Should create a new function to take into account the old current cell and its neighbors
+        // at the very least only going through those. Even more so, we can add the edges that were
+        // crossed.
+        if !self.current_cell.is_some() {
+            self.current_cell = f
+                .cell_at(self.physbox.pos())?
+                .map(|c| {
+                    let overlaps = c
+                        .neighbors_overlapped(&self.physbox)?
+                        .iter()
+                        .map(|(edge, c)| Arc::clone(c))
+                        .collect();
+                    Result::<_, ScarabError>::Ok((c, overlaps))
+                })
+                .transpose()?;
+        }
+        let (cell, overlaps) = self
             .current_cell
             .as_ref()
             .ok_or_else(|| ScarabError::RawString("can't find current cell".to_string()))?;
@@ -172,33 +190,42 @@ impl<N: VecNum> EntityModel<N> {
             // We can just set the new position
             self.physbox.set_pos(new_pos)?;
         } else {
-            let neighbors = cell.neighbors_overlapped(&new_box)?;
-            println!("NEIGHBORS: {neighbors:?}");
-            for (edge, neighbor) in &neighbors {
-                if !cell.get_solidity().exit_edge(*edge)
-                    || !neighbor.get_solidity().enter_edge(*edge)
-                {
-                    new_box.set_touching_edge(&cell.get_box().convert_n(), *edge)?;
-                }
-            }
-
-            if neighbors.len() == 0 {
-                let edges = cell.get_box().convert_n().edges_crossed_by(&new_box);
-                for edge in edges {
-                    if !cell.get_solidity().exit_edge(edge) {
-                        new_box.set_touching_edge(&cell.get_box().convert_n(), edge)?;
+            let mut apply_movement_reductions = |c: &Arc<Cell>| -> ScarabResult<()> {
+                let neighbors = c.neighbors_overlapped(&new_box)?;
+                // println!("NEIGHBORS: {neighbors:?}");
+                for (edge, neighbor) in &neighbors {
+                    if (!c.get_solidity().exit_edge(*edge)
+                        || !neighbor.get_solidity().enter_edge(*edge))
+                        && self.velocity.is_reduced_by_edge(edge)
+                    {
+                        new_box.set_touching_edge(&c.get_box().convert_n(), *edge)?;
                     }
                 }
+
+                if neighbors.len() == 0 {
+                    let edges = c.get_box().convert_n().edges_crossed_by(&new_box);
+                    for edge in edges {
+                        if !c.get_solidity().exit_edge(edge)
+                            && self.velocity.is_reduced_by_edge(&edge)
+                        {
+                            new_box.set_touching_edge(&c.get_box().convert_n(), edge)?;
+                        }
+                    }
+                }
+
+                Ok(())
+            };
+
+            apply_movement_reductions(cell)?;
+
+            for o in overlaps {
+                apply_movement_reductions(o)?;
             }
+
             self.physbox = new_box;
-            // TODO: having to recalculate the current cell every time will get time intensive
-            // Should create a new function to take into account the old current cell and its neighbors
-            // at the very least only going through those. Even more so, we can add the edges that were
-            // crossed.
-            if !cell.get_box().convert_n().contains_pos(new_box.pos()) {
-                self.current_cell = f.cell_at(new_box.pos())?;
-            }
         }
+
+        self.current_cell = None;
 
         Ok(())
     }

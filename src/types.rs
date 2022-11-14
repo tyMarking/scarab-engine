@@ -45,6 +45,13 @@ impl<N: VecNum> TileVec<N> {
         Self { x, y }
     }
 
+    pub fn zero() -> Self {
+        Self {
+            x: 0.into(),
+            y: 0.into(),
+        }
+    }
+
     pub fn x(&self) -> N {
         self.x
     }
@@ -76,6 +83,15 @@ impl<N: VecNum> TileVec<N> {
     pub fn scale(self, factor: f64) -> Self {
         let f64_vec = self.convert_n() * factor;
         TileVec::from_f64_unchecked(f64_vec)
+    }
+
+    pub fn is_reduced_by_edge(&mut self, edge: &BoxEdge) -> bool {
+        match edge {
+            BoxEdge::Top => self.y.into() < 0.0,
+            BoxEdge::Left => self.x.into() < 0.0,
+            BoxEdge::Bottom => self.y.into() > 0.0,
+            BoxEdge::Right => self.x.into() > 0.0,
+        }
     }
 }
 
