@@ -3,7 +3,7 @@ use opengl_graphics::{GlGraphics, OpenGL};
 use piston::event_loop::{EventSettings, Events};
 use piston::input::{RenderArgs, RenderEvent, UpdateArgs, UpdateEvent};
 use piston::window::WindowSettings;
-use piston::{Button, ButtonArgs, ButtonEvent, ButtonState, CloseArgs, CloseEvent, Key};
+use piston::{Button, ButtonArgs, ButtonEvent, ButtonState, CloseArgs, CloseEvent, Event, Key};
 
 use crate::{Camera, Gamestate, ScarabResult, TileVec};
 
@@ -48,8 +48,11 @@ impl App {
                 self.update(&args);
             }
 
-            if let Some(args) = e.button_args() {
-                self.button(&args);
+            match e {
+                Event::Input(input, _i) => {
+                    self.gamestate.input_event(input);
+                }
+                _ => {}
             }
         }
     }
@@ -67,50 +70,9 @@ impl App {
         });
     }
 
-    fn update(&mut self, args: &UpdateArgs) {}
+    fn update(&mut self, args: &UpdateArgs) {
+        self.gamestate.update(args.dt);
+    }
 
     fn close(&mut self, _args: &CloseArgs) {}
-
-    fn button(&mut self, args: &ButtonArgs) {
-        match args.button {
-            Button::Keyboard(key) => match key {
-                Key::W | Key::Up => {
-                    // Up is -y
-                    if args.state == ButtonState::Press {
-                        self.player_move(TileVec::new(0.0, -1.0))
-                    }
-                }
-                Key::A | Key::Left => {
-                    if args.state == ButtonState::Press {
-                        self.player_move(TileVec::new(-1.0, 0.0))
-                    }
-                }
-                Key::S | Key::Down => {
-                    // Down is +y
-                    if args.state == ButtonState::Press {
-                        self.player_move(TileVec::new(0.0, 1.0))
-                    }
-                }
-                Key::D | Key::Right => {
-                    if args.state == ButtonState::Press {
-                        self.player_move(TileVec::new(1.0, 0.0))
-                    }
-                }
-                _ => {}
-            },
-            _ => {}
-        }
-    }
-
-    fn player_move(&mut self, direction: TileVec<f64>) {
-        self.gamestate.player_mut().map_or_else(
-            || println!("no player!"),
-            |p| {
-                let _ = p.try_move(direction).or_else(|e| {
-                    println!("Couldn't move: {:?}", e);
-                    Err(e)
-                });
-            },
-        )
-    }
 }

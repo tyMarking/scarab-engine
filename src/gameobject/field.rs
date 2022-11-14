@@ -346,6 +346,7 @@ impl HasSolidity for Cell {
     }
 }
 
+// TODO: see if there's a way to not add extra impls for the Arc<Cell>
 impl HasBox<u32> for Arc<Cell> {
     fn get_box(&self) -> &PhysBox<u32> {
         &self.physbox

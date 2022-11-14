@@ -5,7 +5,8 @@ use crate::{ScarabError, ScarabResult};
 /// float based RGBA [0, 1]
 pub type Color = [f32; 4];
 
-pub trait VecNum = Sized
+pub trait VecNum:
+    Sized
     + Add<Output = Self>
     + Sub<Output = Self>
     + Mul<Output = Self>
@@ -13,8 +14,25 @@ pub trait VecNum = Sized
     + PartialEq
     + Clone
     + Copy
+    + Send
     + From<u32>
-    + Into<f64>;
+    + Into<f64>
+    + std::fmt::Debug
+{
+    fn from_f64_unchecked(n: f64) -> Self;
+}
+
+impl VecNum for u32 {
+    fn from_f64_unchecked(n: f64) -> u32 {
+        unsafe { n.round().to_int_unchecked() }
+    }
+}
+
+impl VecNum for f64 {
+    fn from_f64_unchecked(n: f64) -> f64 {
+        n
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct TileVec<N: VecNum> {
@@ -47,11 +65,44 @@ impl<N: VecNum> TileVec<N> {
             y: self.y.into(),
         }
     }
+
+    pub fn from_f64_unchecked(vec: TileVec<f64>) -> Self {
+        Self {
+            x: N::from_f64_unchecked(vec.x),
+            y: N::from_f64_unchecked(vec.y),
+        }
+    }
+
+    pub fn scale(self, factor: f64) -> Self {
+        let f64_vec = self.convert_n() * factor;
+        TileVec::from_f64_unchecked(f64_vec)
+    }
 }
 
 impl<N: VecNum> From<TileVec<N>> for (N, N) {
     fn from(val: TileVec<N>) -> (N, N) {
         (val.x, val.y)
+    }
+}
+
+impl<N: VecNum> From<(N, N)> for TileVec<N> {
+    fn from(val: (N, N)) -> Self {
+        Self { x: val.0, y: val.1 }
+    }
+}
+
+impl<N: VecNum> From<TileVec<N>> for [N; 2] {
+    fn from(val: TileVec<N>) -> Self {
+        [val.x, val.y]
+    }
+}
+
+impl<N: VecNum> From<[N; 2]> for TileVec<N> {
+    fn from(val: [N; 2]) -> Self {
+        Self {
+            x: val[0],
+            y: val[1],
+        }
     }
 }
 
@@ -287,9 +338,6 @@ impl<N: VecNum> PhysBox<N> {
         if other.pos.x < this_bottom_right.x && other_bottom_right.x > this_bottom_right.x {
             edges.push(BoxEdge::Right);
         }
-
-        println!("{edges:?}");
-
         edges
     }
 

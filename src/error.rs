@@ -1,3 +1,5 @@
+use std::sync::mpsc::TryRecvError;
+
 use thiserror::Error;
 
 pub type ScarabResult<T> = Result<T, ScarabError>;
@@ -14,4 +16,6 @@ pub enum ScarabError {
     PhysBoxSize,
     #[error("Field positions must be positive")]
     FieldPosition,
+    #[error(transparent)]
+    ChannelRecv(#[from] TryRecvError),
 }

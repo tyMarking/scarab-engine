@@ -1,10 +1,14 @@
 use opengl_graphics::OpenGL;
 
+use piston::{Button, Key};
 use scarab_engine::{
+    control::UpdateChannel,
     gameobject::{
+        entity::EntityControls,
         field::{Cell, Field},
         Entity, AIR, SOLID,
     },
+    playercontroller::{Axis2d, InputController, InputHandler},
     App, Camera, Gamestate, HasBoxMut, PhysBox, ScarabResult, TileVec,
 };
 
@@ -33,8 +37,24 @@ fn main() -> ScarabResult<()> {
     let b = p.get_box_mut();
     b.set_pos(TileVec::new(31.0, 21.0))?;
     b.set_size(TileVec::new(8.0, 8.0))?;
+    p.set_max_velocity(5.0);
+
+    let sender = p.get_sender();
+    let mut controller = InputController::new(sender);
+    controller
+        .bind_axis(
+            Button::Keyboard(Key::D),
+            Button::Keyboard(Key::A),
+            Button::Keyboard(Key::S),
+            Button::Keyboard(Key::W),
+            InputHandler::new(Axis2d::default(), |a: Axis2d| {
+                EntityControls::SetMovement(a.into())
+            }),
+        )
+        .unwrap();
 
     gamestate.add_entity(p);
+    gamestate.add_input_controller(controller);
 
     let app = App::new(OpenGL::V3_2, gamestate, camera).unwrap();
     app.run();

@@ -4,11 +4,14 @@
 
 pub mod app;
 pub mod camera;
+pub mod control;
 pub mod error;
 pub mod gameobject;
 pub mod gamestate;
+pub mod playercontroller;
 pub mod rendering;
 mod types;
+pub mod utils;
 
 pub use app::App;
 pub use camera::Camera;
