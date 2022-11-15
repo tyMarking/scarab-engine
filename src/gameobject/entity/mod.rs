@@ -6,7 +6,7 @@ use std::sync::{
 use crate::{
     control::UpdateChannel,
     gameobject::{
-        field::{Cell, Field},
+        field::{Cell, CellNeighbors, Field},
         HasHealth, HasSolidity, Health, Solidity, SOLID,
     },
     rendering::Renderable,
@@ -191,25 +191,26 @@ impl<N: VecNum> EntityModel<N> {
             self.physbox.set_pos(new_pos)?;
         } else {
             let mut apply_movement_reductions = |c: &Arc<Cell>| -> ScarabResult<()> {
-                let neighbors = c.neighbors_overlapped(&new_box)?;
-                // println!("NEIGHBORS: {neighbors:?}");
-                for (edge, neighbor) in &neighbors {
-                    if (!c.get_solidity().exit_edge(*edge)
-                        || !neighbor.get_solidity().enter_edge(*edge))
-                        && self.velocity.is_reduced_by_edge(edge)
-                    {
-                        new_box.set_touching_edge(&c.get_box().convert_n(), *edge)?;
-                    }
-                }
-
-                if neighbors.len() == 0 {
-                    let edges = c.get_box().convert_n().edges_crossed_by(&new_box);
-                    for edge in edges {
-                        if !c.get_solidity().exit_edge(edge)
-                            && self.velocity.is_reduced_by_edge(&edge)
+                let neighbors = CellNeighbors::from(c.neighbors_overlapped(&new_box)?);
+                for (edge, neighbors) in neighbors.iter() {
+                    for neighbor in neighbors {
+                        if (!c.get_solidity().exit_edge(edge)
+                            || !neighbor.get_solidity().enter_edge(edge))
+                            && self.velocity.is_reduced_by_edge(edge)
                         {
                             new_box.set_touching_edge(&c.get_box().convert_n(), edge)?;
                         }
+                    }
+
+                    // Don't care about the solidity when we're leaving and not
+                    // entering into a new neighbor because this can lead to tricky behavoir
+                    // because at present, movement is not defined when the entity is not
+                    // fully contained by some number of cells
+                    if neighbors.len() == 0
+                        && self.velocity.is_reduced_by_edge(edge)
+                        && c.get_box().convert_n().is_edge_crossed_by(&new_box, edge)
+                    {
+                        new_box.set_touching_edge(&c.get_box().convert_n(), edge)?;
                     }
                 }
 

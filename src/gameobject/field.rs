@@ -10,6 +10,7 @@
 use opengl_graphics::GlGraphics;
 use std::{
     fmt::{Debug, Error, Formatter},
+    slice::Iter,
     sync::Arc,
 };
 
@@ -362,6 +363,78 @@ impl Renderable for Arc<Cell> {
 impl HasSolidity for Arc<Cell> {
     fn get_solidity(&self) -> &Solidity {
         &self.solidity
+    }
+}
+
+pub struct CellNeighbors {
+    pub top: Vec<Arc<Cell>>,
+    pub left: Vec<Arc<Cell>>,
+    pub bottom: Vec<Arc<Cell>>,
+    pub right: Vec<Arc<Cell>>,
+}
+
+impl CellNeighbors {
+    pub fn new() -> Self {
+        Self {
+            top: Vec::new(),
+            left: Vec::new(),
+            bottom: Vec::new(),
+            right: Vec::new(),
+        }
+    }
+
+    pub fn add_neighbor(&mut self, neighbor: Arc<Cell>, edge: BoxEdge) {
+        match edge {
+            BoxEdge::Top => self.top.push(neighbor),
+            BoxEdge::Left => self.left.push(neighbor),
+            BoxEdge::Bottom => self.bottom.push(neighbor),
+            BoxEdge::Right => self.right.push(neighbor),
+        }
+    }
+
+    pub fn get_neighbors(&self, edge: BoxEdge) -> &Vec<Arc<Cell>> {
+        match edge {
+            BoxEdge::Top => &self.top,
+            BoxEdge::Left => &self.left,
+            BoxEdge::Bottom => &self.bottom,
+            BoxEdge::Right => &self.right,
+        }
+    }
+
+    pub fn iter(&self) -> CellNeighborsIter {
+        CellNeighborsIter {
+            current_edge: BoxEdge::iter(),
+            inner: &self,
+        }
+    }
+}
+
+impl From<Vec<(BoxEdge, Arc<Cell>)>> for CellNeighbors {
+    fn from(val: Vec<(BoxEdge, Arc<Cell>)>) -> Self {
+        let mut neighbors = CellNeighbors::new();
+
+        for (edge, cell) in val {
+            neighbors.add_neighbor(cell, edge);
+        }
+
+        neighbors
+    }
+}
+
+pub struct CellNeighborsIter<'a> {
+    current_edge: Iter<'static, BoxEdge>,
+    inner: &'a CellNeighbors,
+}
+
+impl<'a> Iterator for CellNeighborsIter<'a> {
+    type Item = (BoxEdge, &'a Vec<Arc<Cell>>);
+
+    // TODO: there's a chance for slight optimizations here to avoid
+    // the cloning of the vec.
+    fn next(&mut self) -> Option<Self::Item> {
+        self.current_edge
+            .next()
+            .map(|edge| (edge.to_owned(), self.inner.get_neighbors(*edge)))
     }
 }
 

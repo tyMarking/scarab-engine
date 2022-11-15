@@ -1,4 +1,5 @@
 use core::ops::{Add, Mul, Sub};
+use std::slice::Iter;
 
 use crate::{ScarabError, ScarabResult};
 
@@ -85,7 +86,7 @@ impl<N: VecNum> TileVec<N> {
         TileVec::from_f64_unchecked(f64_vec)
     }
 
-    pub fn is_reduced_by_edge(&mut self, edge: &BoxEdge) -> bool {
+    pub fn is_reduced_by_edge(&mut self, edge: BoxEdge) -> bool {
         match edge {
             BoxEdge::Top => self.y.into() < 0.0,
             BoxEdge::Left => self.x.into() < 0.0,
@@ -163,6 +164,11 @@ impl BoxEdge {
             Self::Bottom => Self::Top,
             Self::Right => Self::Left,
         }
+    }
+
+    pub fn iter() -> Iter<'static, BoxEdge> {
+        static EDGES: [BoxEdge; 4] = [BoxEdge::Top, BoxEdge::Left, BoxEdge::Bottom, BoxEdge::Right];
+        EDGES.iter()
     }
 }
 
@@ -338,23 +344,46 @@ impl<N: VecNum> PhysBox<N> {
         if !self.has_overlap(other) || other.is_fully_contained_by(self) {
             return vec![];
         }
-        let this_bottom_right = self.pos + self.size;
-        let other_bottom_right = other.pos + other.size;
         let mut edges = Vec::with_capacity(4);
 
-        if other.pos.y < self.pos.y && other_bottom_right.y > self.pos.y {
+        if self.is_top_edge_crossed_by(other) {
             edges.push(BoxEdge::Top);
         }
-        if other.pos.x < self.pos.x && other_bottom_right.x > self.pos.x {
+        if self.is_left_edge_crossed_by(other) {
             edges.push(BoxEdge::Left);
         }
-        if other.pos.y < this_bottom_right.y && other_bottom_right.y > this_bottom_right.y {
+        if self.is_bottom_edge_crossed_by(other) {
             edges.push(BoxEdge::Bottom);
         }
-        if other.pos.x < this_bottom_right.x && other_bottom_right.x > this_bottom_right.x {
+        if self.is_right_edge_crossed_by(other) {
             edges.push(BoxEdge::Right);
         }
         edges
+    }
+
+    pub fn is_edge_crossed_by(&self, other: &Self, edge: BoxEdge) -> bool {
+        match edge {
+            BoxEdge::Top => self.is_top_edge_crossed_by(other),
+            BoxEdge::Left => self.is_left_edge_crossed_by(other),
+            BoxEdge::Bottom => self.is_bottom_edge_crossed_by(other),
+            BoxEdge::Right => self.is_right_edge_crossed_by(other),
+        }
+    }
+
+    pub fn is_top_edge_crossed_by(&self, other: &Self) -> bool {
+        other.pos.y < self.pos.y && other.bottom_y() > self.pos.y
+    }
+
+    pub fn is_left_edge_crossed_by(&self, other: &Self) -> bool {
+        other.pos.x < self.pos.x && other.right_x() > self.pos.x
+    }
+
+    pub fn is_bottom_edge_crossed_by(&self, other: &Self) -> bool {
+        other.pos.y < self.bottom_y() && other.bottom_y() > self.bottom_y()
+    }
+
+    pub fn is_right_edge_crossed_by(&self, other: &Self) -> bool {
+        other.pos.x < self.right_x() && other.right_x() > self.right_x()
     }
 
     // Directly implementing `From<Vec2<N>> for Vec2<M>` produces a conflicting

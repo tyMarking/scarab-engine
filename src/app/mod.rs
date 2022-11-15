@@ -16,7 +16,7 @@ pub struct App {
 
 impl App {
     pub fn new(opengl: OpenGL, gamestate: Gamestate<f64>, camera: Camera) -> ScarabResult<Self> {
-        let window: Window = WindowSettings::new("spinning-square", [200, 200])
+        let window: Window = WindowSettings::new("spinning-square", [300, 400])
             .graphics_api(opengl)
             .exit_on_esc(true)
             .build()

@@ -37,7 +37,7 @@ fn main() -> ScarabResult<()> {
     let b = p.get_box_mut();
     b.set_pos(TileVec::new(31.0, 21.0))?;
     b.set_size(TileVec::new(8.0, 8.0))?;
-    p.set_max_velocity(5.0);
+    p.set_max_velocity(8.0);
 
     let sender = p.get_sender();
     let mut controller = InputController::new(sender);
