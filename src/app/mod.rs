@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::event_loop::{EventSettings, Events};
@@ -10,12 +12,16 @@ use crate::{Camera, Gamestate, ScarabResult, TileVec};
 pub struct App {
     gl: GlGraphics, // OpenGL drawing backend.
     window: Window,
-    gamestate: Gamestate<f64>,
+    gamestate: Arc<RwLock<Gamestate<f64>>>,
     camera: Camera,
 }
 
 impl App {
-    pub fn new(opengl: OpenGL, gamestate: Gamestate<f64>, camera: Camera) -> ScarabResult<Self> {
+    pub fn new(
+        opengl: OpenGL,
+        gamestate: Arc<RwLock<Gamestate<f64>>>,
+        camera: Camera,
+    ) -> ScarabResult<Self> {
         let window: Window = WindowSettings::new("spinning-square", [300, 400])
             .graphics_api(opengl)
             .exit_on_esc(true)
@@ -50,7 +56,8 @@ impl App {
 
             match e {
                 Event::Input(input, _i) => {
-                    self.gamestate.input_event(input);
+                    let mut gamestate = self.gamestate.write().unwrap();
+                    gamestate.input_event(input);
                 }
                 _ => {}
             }
@@ -66,12 +73,14 @@ impl App {
             // Clear the screen.
             clear(GREEN, gl);
 
-            self.gamestate.render(&self.camera, ctx, gl).unwrap();
+            let gamestate = self.gamestate.read().unwrap();
+            gamestate.render(&self.camera, ctx, gl).unwrap();
         });
     }
 
     fn update(&mut self, args: &UpdateArgs) {
-        self.gamestate.update(args.dt);
+        let mut gamestate = self.gamestate.write().unwrap();
+        gamestate.update(args.dt);
     }
 
     fn close(&mut self, _args: &CloseArgs) {}

@@ -1,6 +1,9 @@
-use std::sync::{
-    mpsc::{self, Receiver, Sender, TryRecvError},
-    Arc,
+use std::{
+    fmt::Debug,
+    sync::{
+        mpsc::{self, Receiver, Sender, TryRecvError},
+        Arc, RwLock,
+    },
 };
 
 use crate::{
@@ -9,9 +12,10 @@ use crate::{
         field::{Cell, CellNeighbors, Field},
         HasHealth, HasSolidity, Health, Solidity, SOLID,
     },
+    gamestate,
     rendering::Renderable,
     utils::normalize,
-    Color, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, TileVec, VecNum,
+    Color, Gamestate, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, TileVec, VecNum,
 };
 
 mod entity_controls;
@@ -22,11 +26,13 @@ pub struct Entity<N: VecNum> {
     model: EntityModel<N>,
     view: Color,
     channel: (Sender<EntityControls>, Receiver<EntityControls>),
+    gamestate: Arc<RwLock<Gamestate<N>>>,
 }
 
 impl<N: VecNum> Entity<N> {
-    pub fn set_field(&mut self, field: Arc<Field>) {
-        self.model.field = Some(field);
+    pub fn set_gamestate(&mut self, gamestate: Arc<RwLock<Gamestate<N>>>) {
+        self.gamestate = Arc::clone(&gamestate);
+        self.model.gamestate = gamestate;
     }
 
     /// Sets the entity's velocity in terms of its maximum velocity
@@ -45,16 +51,25 @@ impl<N: VecNum> Entity<N> {
 
         Ok(())
     }
-}
 
-impl<N: VecNum> Renderable for Entity<N> {
-    fn color(&self) -> &Color {
-        &self.view
+    /// Get the position of the entity after its next movement assuming no collisions
+    pub fn get_projected_box(&self) -> PhysBox<N> {
+        let mut physbox = self.model.physbox.clone();
+        *physbox.pos_mut() + self.model.velocity;
+        physbox
+    }
+
+    pub fn get_model(&self) -> &EntityModel<N> {
+        &self.model
+    }
+
+    pub fn set_view(&mut self, c: Color) {
+        self.view = c;
     }
 }
 
 impl Entity<f64> {
-    pub fn new_def() -> ScarabResult<Self> {
+    pub fn new_def(gamestate: Arc<RwLock<Gamestate<f64>>>) -> ScarabResult<Self> {
         Ok(Self {
             model: EntityModel {
                 velocity: TileVec::new(0.0, 0.0),
@@ -63,17 +78,24 @@ impl Entity<f64> {
                 health: Health::new(10),
                 solidity: SOLID,
                 current_cell: None,
-                field: None,
+                gamestate: Arc::clone(&gamestate),
             },
             view: [0.0, 1.0, 1.0, 1.0],
             channel: mpsc::channel(),
+            gamestate: gamestate,
         })
     }
 }
 
-impl<N: VecNum> UpdateChannel<EntityControls> for Entity<N> {
-    fn game_tick(&mut self, dt: f64) -> ScarabResult<()> {
-        self.model.update(dt)
+impl<N: VecNum> Renderable for Entity<N> {
+    fn color(&self) -> &Color {
+        &self.view
+    }
+}
+
+impl<N: VecNum> UpdateChannel<N, EntityControls> for Entity<N> {
+    fn game_tick(&mut self, gamestate: &Gamestate<N>, dt: f64) -> ScarabResult<()> {
+        self.model.update(gamestate, dt)
     }
 
     fn get_sender(&self) -> Sender<EntityControls> {
@@ -128,7 +150,7 @@ impl<N: VecNum> HasSolidity for Entity<N> {
 }
 
 #[derive(Debug)]
-struct EntityModel<N: VecNum> {
+pub struct EntityModel<N: VecNum> {
     /// Velocity of the entity in tiles/second
     velocity: TileVec<N>,
     max_velocity: N,
@@ -136,7 +158,7 @@ struct EntityModel<N: VecNum> {
     health: Health,
     solidity: Solidity,
     current_cell: Option<(Arc<Cell>, Vec<Arc<Cell>>)>,
-    field: Option<Arc<Field>>,
+    gamestate: Arc<RwLock<Gamestate<N>>>,
 }
 
 impl<N: VecNum> EntityModel<N> {
@@ -144,17 +166,14 @@ impl<N: VecNum> EntityModel<N> {
         self.current_cell.as_ref().map(|(c, o)| c)
     }
 
-    fn update(&mut self, dt: f64) -> ScarabResult<()> {
-        self.try_move(dt)?;
+    fn update(&mut self, gamestate: &Gamestate<N>, dt: f64) -> ScarabResult<()> {
+        self.try_move(gamestate, dt)?;
 
         Ok(())
     }
 
-    fn try_move(&mut self, dt: f64) -> ScarabResult<()> {
-        let f = self
-            .field
-            .as_ref()
-            .ok_or_else(|| ScarabError::RawString("can't move without a field set".to_string()))?;
+    fn try_move(&mut self, gamestate: &Gamestate<N>, dt: f64) -> ScarabResult<()> {
+        let f = gamestate.get_field();
 
         if self.velocity == TileVec::zero() {
             return Ok(());
@@ -186,10 +205,8 @@ impl<N: VecNum> EntityModel<N> {
         let mut new_box = self.physbox.clone();
         new_box.set_pos(new_pos)?;
 
-        if new_box.is_fully_contained_by(&cell.get_box().convert_n()) {
-            // We can just set the new position
-            self.physbox.set_pos(new_pos)?;
-        } else {
+        // Cell Based collisions
+        if !new_box.is_fully_contained_by(&cell.get_box().convert_n()) {
             let mut apply_movement_reductions = |c: &Arc<Cell>| -> ScarabResult<()> {
                 let neighbors = CellNeighbors::from(c.neighbors_overlapped(&new_box)?);
                 for (edge, neighbors) in neighbors.iter() {
@@ -222,9 +239,18 @@ impl<N: VecNum> EntityModel<N> {
             for o in overlaps {
                 apply_movement_reductions(o)?;
             }
-
-            self.physbox = new_box;
         }
+
+        // TODO: switch to a separate "resolve entity collisions step"
+        // doing these collated will definite cause problems as the number
+        // of entities increases
+        if self.solidity.has_solidity() {
+            for physbox in gamestate.overlapping_entity_boxes(self, &new_box) {
+                new_box.shift_to_nonoverlapping(&physbox);
+            }
+        }
+
+        self.physbox = new_box;
 
         self.current_cell = None;
 
@@ -232,6 +258,8 @@ impl<N: VecNum> EntityModel<N> {
     }
 }
 
+// TODO: think about if the model or the full struct should have
+// these traits
 impl<N: VecNum> HasBox<N> for EntityModel<N> {
     fn get_box(&self) -> &PhysBox<N> {
         &self.physbox

@@ -156,6 +156,13 @@ pub enum BoxEdge {
     Right,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(usize)]
+pub enum Axis {
+    X,
+    Y,
+}
+
 impl BoxEdge {
     pub fn opposite(&self) -> BoxEdge {
         match self {
@@ -163,6 +170,29 @@ impl BoxEdge {
             Self::Left => Self::Right,
             Self::Bottom => Self::Top,
             Self::Right => Self::Left,
+        }
+    }
+
+    pub fn direction(&self) -> [f64; 2] {
+        match self {
+            BoxEdge::Top => [0.0, -1.0],
+            BoxEdge::Left => [-1.0, 0.0],
+            BoxEdge::Bottom => [0.0, 1.0],
+            BoxEdge::Right => [1.0, 0.0],
+        }
+    }
+
+    pub fn parallel_axis(&self) -> Axis {
+        match self {
+            BoxEdge::Top | BoxEdge::Bottom => Axis::Y,
+            BoxEdge::Left | BoxEdge::Right => Axis::X,
+        }
+    }
+
+    pub fn perpendicular_axis(&self) -> Axis {
+        match self {
+            BoxEdge::Top | BoxEdge::Bottom => Axis::X,
+            BoxEdge::Left | BoxEdge::Right => Axis::Y,
         }
     }
 
@@ -197,6 +227,10 @@ impl<N: VecNum> PhysBox<N> {
 
     pub fn pos(&self) -> TileVec<N> {
         self.pos
+    }
+
+    pub fn pos_mut(&mut self) -> &mut TileVec<N> {
+        &mut self.pos
     }
 
     pub fn set_pos(&mut self, pos: TileVec<N>) -> ScarabResult<()> {
@@ -299,6 +333,40 @@ impl<N: VecNum> PhysBox<N> {
     /// Moves `self` so that its `edge` coincides with `other`s `edge`
     pub fn set_touching_edge(&mut self, other: &Self, edge: BoxEdge) -> ScarabResult<()> {
         self.set_edge(other.get_edge(edge), edge)
+    }
+
+    /// Moves `self` so it does not overlap with `other`.
+    /// Does nothing if they already don't overlap.
+    pub fn shift_to_nonoverlapping(&mut self, other: &Self) -> ScarabResult<()> {
+        let diffs = vec![
+            (BoxEdge::Top, other.bottom_y() - self.top_y()),
+            (BoxEdge::Left, other.right_x() - self.left_x()),
+            (BoxEdge::Bottom, self.bottom_y() - other.top_y()),
+            (BoxEdge::Right, self.right_x() - other.left_x()),
+        ];
+
+        let shift_edge_opt = diffs.iter().fold(None, |smallest_edge, (edge, diff)| {
+            if Into::<f64>::into(*diff) > 0.0
+                && smallest_edge.map_or_else(|| true, |(_, s)| diff < s)
+            {
+                Some((edge, diff))
+            } else {
+                smallest_edge
+            }
+        });
+
+        if let Some((edge, diff)) = shift_edge_opt {
+            self.set_edge(
+                N::from_f64_unchecked(
+                    Into::<f64>::into(self.get_edge(*edge))
+                        + Into::<f64>::into(*diff)
+                            * edge.opposite().direction()[edge.parallel_axis() as usize],
+                ),
+                *edge,
+            )?
+        }
+
+        Ok(())
     }
 
     /// For clarity this uses >= and <

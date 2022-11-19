@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLock};
+
 use opengl_graphics::OpenGL;
 
 use piston::{Button, Key};
@@ -28,16 +30,16 @@ fn main() -> ScarabResult<()> {
 
     let field = Field::new(vec![cell, cell2, cell3, cell4, cell5, cell6, cell7, cell8])?;
 
-    let mut gamestate = Gamestate::new(field);
+    let gamestate = Arc::new(RwLock::new(Gamestate::new(field)));
 
     let cambox = PhysBox::new((0, 0), (100, 100))?;
     let camera = Camera::new(5, cambox, TileVec::new(1000, 1000));
 
-    let mut p = Entity::new_def()?;
+    let mut p = Entity::new_def(Arc::clone(&gamestate))?;
     let b = p.get_box_mut();
     b.set_pos(TileVec::new(31.0, 21.0))?;
     b.set_size(TileVec::new(8.0, 8.0))?;
-    p.set_max_velocity(8.0);
+    p.set_max_velocity(8.0)?;
 
     let sender = p.get_sender();
     let mut controller = InputController::new(sender);
@@ -53,8 +55,20 @@ fn main() -> ScarabResult<()> {
         )
         .unwrap();
 
-    gamestate.add_entity(p);
-    gamestate.add_input_controller(controller);
+    let mut r = Entity::new_def(Arc::clone(&gamestate))?;
+    let b = r.get_box_mut();
+    b.set_pos(TileVec::new(31.0, 34.0))?;
+    b.set_size(TileVec::new(3.0, 3.0))?;
+    r.set_max_velocity(10.0)?;
+    r.set_view([1.0, 0.0, 1.0, 1.0]);
+
+    {
+        let mut state = gamestate.try_write().unwrap();
+        state.add_input_controller(controller);
+    }
+
+    Gamestate::add_entity(&gamestate, p)?;
+    Gamestate::add_entity(&gamestate, r)?;
 
     let app = App::new(OpenGL::V3_2, gamestate, camera).unwrap();
     app.run();

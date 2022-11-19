@@ -9,7 +9,7 @@ use crate::BoxEdge;
 /// Represents whether the typical entity can enter/exit a cell from each side
 /// The typical solid cell will be 255 or 15, while the typical navigable cell
 /// will be 0.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Solidity(pub u8);
 
 pub const SOLID: Solidity = Solidity(255);
@@ -75,6 +75,11 @@ impl Solidity {
             BoxEdge::Bottom => self.exit_bottom(),
             BoxEdge::Right => self.exit_right(),
         }
+    }
+
+    // Returns true if there is any edge that can't be entered or exited
+    pub fn has_solidity(&self) -> bool {
+        self.0 != 0
     }
 }
 
