@@ -4,7 +4,7 @@ use thiserror::Error;
 
 pub type ScarabResult<T> = Result<T, ScarabError>;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq)]
 pub enum ScarabError {
     #[error("Unable to get a GPU Adapter")]
     RequestAdapterError,

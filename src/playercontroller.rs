@@ -6,7 +6,7 @@ use std::{
 use piston::{Button, ButtonState, Input};
 use uuid::Uuid;
 
-use crate::gameobject::entity::EntityControls;
+use crate::{gameobject::entity::EntityControls, Velocity};
 
 use thiserror::Error;
 
@@ -37,6 +37,7 @@ impl<T: Send> From<SendError<T>> for InputError {
 // mouse (pointer)
 // mouse scroll
 
+#[derive(Debug)]
 pub struct InputController {
     sender: Sender<EntityControls>,
     button_bindings: HashMap<Button, InputHandler<ButtonState>>,
@@ -133,6 +134,7 @@ impl InputController {
 //     MouseScroll([f64; 2]),
 // }
 
+#[derive(Debug)]
 pub struct InputHandler<T: Copy> {
     state: T,
     to_control_binding: fn(T) -> EntityControls,
@@ -186,6 +188,15 @@ impl Axis2d {
 impl From<Axis2d> for [f64; 2] {
     fn from(val: Axis2d) -> Self {
         [val.pos_x - val.neg_x, val.pos_y - val.neg_y]
+    }
+}
+
+impl From<Axis2d> for Velocity {
+    fn from(val: Axis2d) -> Self {
+        Velocity {
+            x: val.pos_x - val.neg_x,
+            y: val.pos_y - val.neg_y,
+        }
     }
 }
 

@@ -1,3 +1,4 @@
+use graphics::{types::Color, Context};
 /// A field is a graph of rectangles (cells) that each have a (backup) rendering
 /// component and a collision (or non-collision) component
 ///
@@ -8,6 +9,7 @@
 ///
 /// For simplicity, it's assumed that intra-cell movement is always possible
 use opengl_graphics::GlGraphics;
+use shapes::Point;
 use std::{
     fmt::{Debug, Error, Formatter},
     slice::Iter,
@@ -15,11 +17,11 @@ use std::{
 };
 
 use crate::{
-    gameobject::Solidity, rendering::Renderable, BoxEdge, Camera, Color, HasBox, HasBoxMut,
-    PhysBox, ScarabError, ScarabResult, TileVec, VecNum,
+    gameobject::Solidity, rendering::View, BoxEdge, Camera, HasBox, HasBoxMut, PhysBox,
+    ScarabError, ScarabResult,
 };
 
-use super::HasSolidity;
+use super::{HasSolidity, AIR, SOLID};
 
 #[derive(Debug, Clone)]
 pub struct Field {
@@ -43,6 +45,7 @@ impl Field {
             .collect();
 
         let mut edges = vec![vec![None; cells.len()]; cells.len()];
+
         Field::build_cells(&mut cells, &mut edges);
 
         // TODO: potential validation steps:
@@ -55,50 +58,56 @@ impl Field {
     }
 
     fn build_cells(cells: &mut Vec<Arc<Cell>>, edges: &mut Vec<Vec<Option<BoxEdge>>>) -> () {
-        /// Find the bordering cells along the given edge,
-        /// and mark the appropriate graph edges
-        /// c: the current cell
-        /// cells: the vec of cells
-        /// edges: the edges to be initialized
-        /// test_pos: mut TileVec.
-        ///     Must be initialized to `TileVec(c.pos.0 + off_x, c.pos.1 + off_y)`
-        ///     where `off_x` is 0 when `direction` is 0 or c.size.0 otherwise and
-        ///     `off_y` is 0 when `direction is 1 or c.size.1 otherwise.
-        ///     This part is not pulled into the macro due to some complications
-        ///     with typing because TileVec is unsigned.
-        /// direction: x or y
-        /// ortho_direction: y or x, must be the opposite of `direction`
-        /// edge: A `CellEdge` variant
-        macro_rules! cell_edges {
-            ($c:ident,
-                $cells:ident,
-                $edges:ident,
-                $test_pos:ident,
-                $direction:tt,
-                $ortho_direction:tt,
-                $edge:expr,
-                $neighbors:tt
-            ) => {
-                while $test_pos.$direction
-                    < $c.physbox.pos().$direction + $c.physbox.size().$direction
+        // Find the bordering cells along the given edge,
+        // and mark the appropriate graph edges
+        // c: the current cell
+        // test_pos: mut TileVec.
+        //     Must be initialized to `TileVec(c.pos.0 + off_x, c.pos.1 + off_y)`
+        //     where `off_x` is 0 when `direction` is 0 or c.size.0 otherwise and
+        //     `off_y` is 0 when `direction is 1 or c.size.1 otherwise.
+        //     This part is not pulled into the macro due to some complications
+        //     with typing because TileVec is unsigned.
+        // edge: A `BoxEdge` variant
+        let mut cell_edges =
+            |c: &Cell, test_pos: Point, edge: BoxEdge, neighbors: &mut Vec<Arc<Cell>>| {
+                let mut test_pos = test_pos.clone();
+
+                // We iterate in the direction is orthogonal to edge's axis
+                while edge.get_normal_component_of(&test_pos)
+                    < c.physbox.get_far_axis(edge.perpendicular_axis())
                 {
-                    let new_pos = Field::cell_at_internal(&$cells, $test_pos).map_or_else(
-                        || $test_pos.$direction + 1,
-                        |n| {
-                            edges[$c.i][n.i] =
-                                if $c.solidity.exit_top() && n.solidity.enter_bottom() {
-                                    Some($edge)
+                    // Find the cell at the current 'test_pos'. If it exists and
+                    // is a valid edge (i.e. can be exited and then entered)
+                    // then add it to neighbors
+                    // Then set the new test pos to the far end of the neighbor
+                    let new_normal_component = Field::cell_at_internal(&cells, test_pos)
+                        .map_or_else(
+                            || edge.get_normal_component_of(&test_pos) + 1.0,
+                            |n| {
+                                edges[c.i][n.i] = if c.solidity.exit_edge(edge)
+                                    && n.solidity.enter_edge(edge.opposite())
+                                {
+                                    Some(edge)
                                 } else {
                                     None
                                 };
-                            $neighbors.push(Arc::clone(&n));
-                            n.physbox.pos().$direction + n.physbox.size().$direction
+                                neighbors.push(Arc::clone(&n));
+                                n.physbox.get_far_axis(edge.perpendicular_axis())
+                            },
+                        );
+
+                    test_pos = match edge {
+                        BoxEdge::Top | BoxEdge::Bottom => Point {
+                            x: new_normal_component,
+                            y: test_pos.y,
                         },
-                    );
-                    $test_pos.$direction = new_pos;
+                        BoxEdge::Left | BoxEdge::Right => Point {
+                            x: test_pos.x,
+                            y: new_normal_component,
+                        },
+                    };
                 }
             };
-        }
 
         // Initialize the neighbors and edges
         for i in 0..cells.len() {
@@ -111,61 +120,20 @@ impl Field {
             let mut right_neighbors = Vec::new();
 
             // Along the top edge
-            if physbox.pos().y() != 0 {
-                test_pos = TileVec::new(physbox.pos().x(), physbox.pos().y() - 1);
-
-                cell_edges!(
-                    cell,
-                    cells,
-                    edges,
-                    test_pos,
-                    x,
-                    y,
-                    BoxEdge::Top,
-                    top_neighbors
-                );
-            }
+            test_pos = physbox.pos() - [0.0, 1.0];
+            cell_edges(&cell, test_pos, BoxEdge::Top, &mut top_neighbors);
 
             // Along the left edge
-            if physbox.pos().x() != 0 {
-                test_pos = TileVec::new(physbox.pos().x() - 1, physbox.pos().y());
-                cell_edges!(
-                    cell,
-                    cells,
-                    edges,
-                    test_pos,
-                    y,
-                    x,
-                    BoxEdge::Left,
-                    left_neighbors
-                );
-            }
+            test_pos = physbox.pos() - [1.0, 0.0];
+            cell_edges(&cell, test_pos, BoxEdge::Left, &mut left_neighbors);
 
             // Along the bottom edge
-            test_pos = TileVec::new(physbox.pos().x(), physbox.pos().y() + physbox.size().y());
-            cell_edges!(
-                cell,
-                cells,
-                edges,
-                test_pos,
-                x,
-                y,
-                BoxEdge::Bottom,
-                bottom_neighbors
-            );
+            test_pos = [physbox.left_x(), physbox.bottom_y()].into();
+            cell_edges(&cell, test_pos, BoxEdge::Bottom, &mut bottom_neighbors);
 
             // Along the right edge
-            test_pos = TileVec::new(physbox.pos().x() + physbox.size().x(), physbox.pos().y());
-            cell_edges!(
-                cell,
-                cells,
-                edges,
-                test_pos,
-                y,
-                x,
-                BoxEdge::Right,
-                right_neighbors
-            );
+            test_pos = [physbox.right_x(), physbox.top_y()].into();
+            cell_edges(&cell, test_pos, BoxEdge::Right, &mut right_neighbors);
 
             // Doing an unsafe `get_mut_unchecked` because we know this is the
             // only place that owns the cells at the moment
@@ -179,39 +147,57 @@ impl Field {
         }
     }
 
-    fn validate_pos<N: VecNum>(pos: TileVec<N>) -> ScarabResult<()> {
-        if pos.x().into() < 0.0 || pos.y().into() < 0.0 {
-            return Err(ScarabError::FieldPosition);
-        }
-        Ok(())
-    }
-
-    fn cell_at_internal<N: VecNum>(cells: &Vec<Arc<Cell>>, pos: TileVec<N>) -> Option<Arc<Cell>> {
+    fn cell_at_internal(cells: &Vec<Arc<Cell>>, pos: Point) -> Option<Arc<Cell>> {
         for c in cells {
-            if c.physbox.convert_n().contains_pos(pos) {
+            if c.physbox.contains_pos(pos) {
                 return Some(Arc::clone(c));
             }
         }
         None
     }
 
-    pub fn cell_at<N: VecNum>(&self, pos: TileVec<N>) -> ScarabResult<Option<Arc<Cell>>> {
-        Field::validate_pos(pos)?;
+    pub fn cell_at(&self, pos: Point) -> Option<Arc<Cell>> {
         // The real challenge of this will be to try and do it in less than O(n)
-        Ok(Field::cell_at_internal(&self.cells, pos))
+        Field::cell_at_internal(&self.cells, pos)
     }
 
     // pub fn is_on_border(&self, pos: Vec2, size: TileVec) -> bool {
     //     todo!()
     // }
+}
 
-    pub fn render(
+#[derive(Debug, Clone)]
+pub struct FieldView {
+    pub solid_view: CellView,
+    pub air_view: CellView,
+    pub default_view: CellView,
+}
+
+impl FieldView {
+    fn view_for_cell(&self, cell: &Cell) -> &CellView {
+        match cell.solidity {
+            SOLID => &self.solid_view,
+            AIR => &self.air_view,
+            _ => &self.default_view,
+        }
+    }
+}
+
+impl View for FieldView {
+    type Viewed = Field;
+
+    fn render(
         &self,
+        viewed: &Self::Viewed,
         camera: &Camera,
-        ctx: graphics::Context,
+        ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
-        camera.render_boxes(&self.cells, ctx, gl)
+        for cell in &viewed.cells {
+            let cell_view = self.view_for_cell(cell);
+            cell_view.render(cell, camera, ctx, gl)?;
+        }
+        Ok(())
     }
 }
 
@@ -220,10 +206,8 @@ pub struct Cell {
     i: usize,
     /// Defines how entities can move into/out of this cell
     solidity: Solidity,
-    /// Debug rendering color
-    color: Color,
     /// The upper left corner and width/height of the cell
-    physbox: PhysBox<u32>,
+    physbox: PhysBox,
     /// The Field indices of cells bordering this one along its top edge
     top_neighbors: Vec<Arc<Cell>>,
     /// The Field indices of cells bordering this one along its left edge
@@ -235,11 +219,10 @@ pub struct Cell {
 }
 
 impl Cell {
-    pub fn new(solidity: Solidity, color: Color, physbox: PhysBox<u32>) -> Self {
+    pub fn new(solidity: Solidity, physbox: PhysBox) -> Self {
         Self {
             i: 0,
             solidity,
-            color,
             physbox,
             top_neighbors: vec![],
             left_neighbors: vec![],
@@ -258,13 +241,8 @@ impl Cell {
     }
 
     /// Returns a list of the neighbors of this cell which the given physbox overlaps
-    pub fn neighbors_overlapped<N: VecNum>(
-        &self,
-        physbox: &PhysBox<N>,
-    ) -> ScarabResult<Vec<(BoxEdge, Arc<Cell>)>> {
-        Ok(self
-            .physbox
-            .convert_n()
+    pub fn neighbors_overlapped(&self, physbox: &PhysBox) -> Vec<(BoxEdge, Arc<Cell>)> {
+        self.physbox
             .edges_crossed_by(physbox)
             .into_iter()
             .flat_map(|edge| {
@@ -272,20 +250,20 @@ impl Cell {
                     .iter()
                     .map(move |cell| (edge, cell))
             })
-            .filter(|(_edge, neighbor)| physbox.has_overlap(&neighbor.physbox.convert_n()))
+            .filter(|(_edge, neighbor)| physbox.has_overlap(&neighbor.physbox))
             .map(|(edge, neighbor)| (edge, Arc::clone(neighbor)))
-            .collect())
+            .collect()
     }
 }
 
 // Manually implementing Debug for Cell b/c otherwise it would create an
-// infinite loop between the neighbors
+// infinite loop between the neighbors.
+// The main difference is showing neighbor's indexes rather than their full val.
 impl Debug for Cell {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         f.debug_struct("Cell")
             .field("i", &self.i)
             .field("solidity", &self.solidity)
-            .field("color", &self.color)
             .field("physbox", &self.physbox)
             .field(
                 "top_neighbors",
@@ -323,21 +301,15 @@ impl Debug for Cell {
     }
 }
 
-impl HasBox<u32> for Cell {
-    fn get_box(&self) -> &PhysBox<u32> {
+impl HasBox for Cell {
+    fn get_box(&self) -> &PhysBox {
         &self.physbox
     }
 }
 
-impl HasBoxMut<u32> for Cell {
-    fn get_box_mut(&mut self) -> &mut PhysBox<u32> {
+impl HasBoxMut for Cell {
+    fn get_box_mut(&mut self) -> &mut PhysBox {
         &mut self.physbox
-    }
-}
-
-impl Renderable for Cell {
-    fn color(&self) -> &Color {
-        &self.color
     }
 }
 
@@ -348,15 +320,9 @@ impl HasSolidity for Cell {
 }
 
 // TODO: see if there's a way to not add extra impls for the Arc<Cell>
-impl HasBox<u32> for Arc<Cell> {
-    fn get_box(&self) -> &PhysBox<u32> {
+impl HasBox for Arc<Cell> {
+    fn get_box(&self) -> &PhysBox {
         &self.physbox
-    }
-}
-
-impl Renderable for Arc<Cell> {
-    fn color(&self) -> &Color {
-        &self.color
     }
 }
 
@@ -435,6 +401,29 @@ impl<'a> Iterator for CellNeighborsIter<'a> {
         self.current_edge
             .next()
             .map(|edge| (edge.to_owned(), self.inner.get_neighbors(*edge)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CellView {
+    pub color: Color,
+}
+
+impl View for CellView {
+    type Viewed = Cell;
+
+    fn render(
+        &self,
+        viewed: &Self::Viewed,
+        camera: &Camera,
+        ctx: Context,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()> {
+        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+            graphics::rectangle(self.color, rect, transform, gl);
+        }
+
+        Ok(())
     }
 }
 

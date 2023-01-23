@@ -1,20 +1,20 @@
-use graphics::{Context, Transformed};
-use opengl_graphics::GlGraphics;
+use graphics::{types::Scalar, Context, Transformed};
+use shapes::Point;
 
-use crate::{rendering::Renderable, HasBox, PhysBox, ScarabResult, TileVec, VecNum};
+use crate::PhysBox;
 
 #[derive(Debug, Clone)]
 pub struct Camera {
     /// The number of screen pixels per tile
     pixels_per_tile: u32,
-    /// The camera's position and dimensions by tiles
-    physbox: PhysBox<u32>,
+    /// The camera's position and dimensions in world coordinates
+    physbox: PhysBox,
     /// The pixel resoultion of the camera
-    resolution: TileVec<u32>,
+    resolution: [u32; 2],
 }
 
 impl Camera {
-    pub fn new(pixels_per_tile: u32, physbox: PhysBox<u32>, resolution: TileVec<u32>) -> Self {
+    pub fn new(pixels_per_tile: u32, physbox: PhysBox, resolution: [u32; 2]) -> Self {
         Self {
             pixels_per_tile,
             physbox,
@@ -22,41 +22,37 @@ impl Camera {
         }
     }
 
-    pub fn transform<N: VecNum>(&self, ctx: &Context, pos: TileVec<N>) -> [[f64; 3]; 2] {
-        let t_pos = (pos - self.physbox.pos().convert_n()) * self.pixels_per_tile.into();
+    pub fn transform(&self, ctx: &Context, pos: Point) -> [[f64; 3]; 2] {
+        let top_left = pos - self.physbox.pos();
+        let top_left_scaled = top_left * self.pixels_per_tile.into();
+        //let t_pos = (pos - self.physbox.pos().convert_n()) * self.pixels_per_tile.into();
 
-        ctx.transform.trans(t_pos.x().into(), t_pos.y().into())
+        ctx.transform.trans(top_left_scaled.x, top_left_scaled.y)
     }
 
     pub fn pixels_per_tile(&self) -> u32 {
         self.pixels_per_tile
     }
 
-    pub fn render_boxes<N, B>(
+    /// Gives the simple transform and redering rectangle for a 2D PhysBox
+    pub fn box_renderables(
         &self,
-        boxes: &[B],
+        physbox: PhysBox,
         ctx: Context,
-        gl: &mut GlGraphics,
-    ) -> ScarabResult<()>
-    where
-        N: VecNum,
-        B: HasBox<N> + Renderable,
-    {
-        for b in boxes {
-            let physbox = b.get_box();
-            if physbox.has_overlap(&self.physbox.convert_n()) {
-                let transform = self.transform(&ctx, physbox.pos());
-                let (x1, y1): (f64, f64) = physbox.size().convert_n().into();
-                let rect = graphics::rectangle::rectangle_by_corners(
-                    0.0,
-                    0.0,
-                    x1 * self.pixels_per_tile as f64,
-                    y1 * self.pixels_per_tile as f64,
-                );
+    ) -> Option<([[f64; 3]; 2], [f64; 4])> {
+        if physbox.has_overlap(&self.physbox) {
+            let transform = self.transform(&ctx, physbox.pos());
+            let [x1, y1]: [Scalar; 2] = physbox.size().into();
+            let rect = graphics::rectangle::rectangle_by_corners(
+                0.0,
+                0.0,
+                x1 * self.pixels_per_tile as f64,
+                y1 * self.pixels_per_tile as f64,
+            );
 
-                graphics::rectangle(b.color().to_owned(), rect, transform, gl);
-            }
+            Some((transform, rect))
+        } else {
+            None
         }
-        Ok(())
     }
 }

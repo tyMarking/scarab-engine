@@ -6,46 +6,53 @@ use std::{
 
 use graphics::Context;
 use opengl_graphics::GlGraphics;
-use piston::UpdateArgs;
 
 use crate::{
-    control::{DoUpdate, UpdateChannel},
+    control::UpdateChannel,
     gameobject::{
-        entity::{Entity, EntityModel},
-        field::Field,
+        entity::{Entity, EntityView},
+        field::{Field, FieldView},
         HasSolidity,
     },
     playercontroller::InputController,
-    Camera, HasBox, PhysBox, ScarabResult, VecNum,
+    rendering::View,
+    Camera, HasBox, PhysBox, ScarabResult,
 };
 
-pub struct Gamestate<N: VecNum> {
+#[derive(Debug)]
+pub struct Gamestate<'a> {
     field: Arc<Field>,
-    entities: Vec<Entity<N>>,
+    field_view: FieldView,
+    entities: Vec<(Entity, &'a EntityView)>,
     input_controllers: Vec<InputController>,
 }
 
-impl<N: VecNum> Gamestate<N> {
-    pub fn new(field: Field) -> Self {
+impl<'a> Gamestate<'a> {
+    pub fn new(field: Field, field_view: FieldView) -> Self {
         Self {
             field: Arc::new(field),
+            field_view,
             entities: vec![],
             input_controllers: vec![],
         }
     }
 
     pub fn render(&self, camera: &Camera, ctx: Context, gl: &mut GlGraphics) -> ScarabResult<()> {
-        self.field.render(&camera, ctx, gl)?;
+        self.field_view.render(&self.field, &camera, ctx, gl)?;
 
-        camera.render_boxes(&self.entities, ctx, gl)?;
-
+        for (entity, view) in &self.entities {
+            view.render(entity, camera, ctx, gl)?;
+        }
         Ok(())
     }
 
-    pub fn add_entity(arc: &Arc<RwLock<Self>>, mut entity: Entity<N>) -> ScarabResult<()> {
-        entity.set_gamestate(Arc::clone(arc));
+    pub fn add_entity(
+        arc: &Arc<RwLock<Self>>,
+        entity: Entity,
+        view: &'a EntityView,
+    ) -> ScarabResult<()> {
         let mut state = arc.write().unwrap();
-        state.entities.push(entity);
+        state.entities.push((entity, view));
         Ok(())
     }
 
@@ -57,12 +64,12 @@ impl<N: VecNum> Gamestate<N> {
         self.input_controllers.push(controller);
     }
 
-    pub fn player(&self) -> Option<&Entity<N>> {
-        self.entities.get(0)
+    pub fn player(&self) -> Option<&Entity> {
+        self.entities.get(0).map(|(e, _)| e)
     }
 
-    pub fn player_mut(&mut self) -> Option<&mut Entity<N>> {
-        self.entities.get_mut(0)
+    pub fn player_mut(&mut self) -> Option<&mut Entity> {
+        self.entities.get_mut(0).map(|(e, _)| e)
     }
 
     pub fn update(&mut self, dt: f64) -> ScarabResult<()> {
@@ -70,14 +77,14 @@ impl<N: VecNum> Gamestate<N> {
         // be more confident in the entities projected positions
         // for entity-entity collisions
         for i in 0..self.entities.len() {
-            self.entities[i].exhaust_channel()?;
+            self.entities[i].0.exhaust_channel()?;
         }
 
         unsafe {
             let entities_ptr = self.entities.as_mut_ptr();
             for i in 0..self.entities.len() {
                 if let Some(e) = entities_ptr.add(i).as_mut() {
-                    e.game_tick(self, dt)?;
+                    e.0.game_tick(self, dt)?;
                 }
             }
         }
@@ -106,16 +113,12 @@ impl<N: VecNum> Gamestate<N> {
     //     Ok(())
     // }
 
-    pub fn overlapping_entity_boxes(
-        &self,
-        entity: &EntityModel<N>,
-        physbox: &PhysBox<N>,
-    ) -> Vec<PhysBox<N>> {
+    pub fn overlapping_entity_boxes(&self, entity: &Entity, physbox: &PhysBox) -> Vec<PhysBox> {
         self.entities
             .iter()
-            .filter(|e| !ptr::eq(e.get_model(), entity))
-            .filter(|e| e.get_solidity().has_solidity())
-            .filter_map(|e| {
+            .filter(|e| !ptr::eq(&e.0, entity))
+            .filter(|e| e.0.get_solidity().has_solidity())
+            .filter_map(|(e, _v)| {
                 let projected = e.get_projected_box();
                 if physbox.has_overlap(&projected) {
                     Some(projected)
@@ -126,16 +129,6 @@ impl<N: VecNum> Gamestate<N> {
                 }
             })
             .collect()
-    }
-}
-
-impl<N: VecNum> Debug for Gamestate<N> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Gamestate")
-            .field("field", &self.field)
-            .field("entities", &self.entities.len())
-            .field("input_controllers", &self.input_controllers.len())
-            .finish()
     }
 }
 

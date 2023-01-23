@@ -1,6 +1,6 @@
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Sender, TryRecvError};
 
-use crate::{Gamestate, ScarabResult, VecNum};
+use crate::{Gamestate, ScarabResult};
 
 /// The maximum number of command reads per update
 const CHANNEL_READS: usize = 5;
@@ -9,9 +9,9 @@ pub trait DoUpdate {
     fn update(&mut self, dt: f64) -> ScarabResult<()>;
 }
 
-pub trait UpdateChannel<N: VecNum, T: Send> {
+pub trait UpdateChannel<T: Send> {
     // Call for updates that should happen on every game tick
-    fn game_tick(&mut self, gamestate: &Gamestate<N>, dt: f64) -> ScarabResult<()>;
+    fn game_tick(&mut self, gamestate: &Gamestate, dt: f64) -> ScarabResult<()>;
 
     fn get_sender(&self) -> Sender<T>;
 

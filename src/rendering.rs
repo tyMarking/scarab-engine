@@ -1,7 +1,16 @@
-use crate::Color;
+use graphics::Context;
+use opengl_graphics::GlGraphics;
 
-pub trait Renderable {
-    // fn render(&self, camera: Camera, ctx: Context, gl: &mut GlGraphics) -> ScarabResult<()>;
+use crate::{Camera, ScarabResult};
 
-    fn color(&self) -> &Color;
+pub trait View {
+    type Viewed;
+
+    fn render(
+        &self,
+        viewed: &Self::Viewed,
+        camera: &Camera,
+        ctx: Context,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()>;
 }
