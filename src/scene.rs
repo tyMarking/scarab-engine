@@ -12,17 +12,14 @@ use crate::{
     Camera, ScarabResult,
 };
 
-// TODO: rename Gamestate to "Scene"
-// Then `Scene`s shouldn't have any concept of "Player inputs" those should all
-// be at the application level
 #[derive(Debug)]
-pub struct Gamestate<E> {
+pub struct Scene<E> {
     field: Field,
     field_view: FieldView,
     entity_registry: EntityRegistry<E>,
 }
 
-impl<E: RegisteredEntity> Gamestate<E> {
+impl<E: RegisteredEntity> Scene<E> {
     pub fn new(field: Field, field_view: FieldView) -> Self {
         Self {
             field,
