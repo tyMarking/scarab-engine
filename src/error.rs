@@ -1,6 +1,6 @@
-use std::sync::mpsc::TryRecvError;
-
 use thiserror::Error;
+
+use crate::gameobject::entity::registry::ControlError;
 
 pub type ScarabResult<T> = Result<T, ScarabError>;
 
@@ -17,5 +17,5 @@ pub enum ScarabError {
     #[error("Field positions must be positive")]
     FieldPosition,
     #[error(transparent)]
-    ChannelRecv(#[from] TryRecvError),
+    ControlError(#[from] ControlError),
 }

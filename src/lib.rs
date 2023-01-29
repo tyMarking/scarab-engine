@@ -3,11 +3,10 @@
 #![feature(trait_alias)]
 
 pub mod camera;
-pub mod control;
 pub mod error;
 pub mod gameobject;
 pub mod gamestate;
-pub mod playercontroller;
+pub mod input;
 pub mod rendering;
 mod types;
 pub mod utils;

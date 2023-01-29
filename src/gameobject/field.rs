@@ -18,7 +18,7 @@ use std::{
 
 use crate::{
     gameobject::Solidity, rendering::View, BoxEdge, Camera, HasBox, HasBoxMut, PhysBox,
-    ScarabError, ScarabResult,
+    ScarabResult,
 };
 
 use super::{HasSolidity, AIR, SOLID};

@@ -1,28 +1,30 @@
-use std::{
-    fmt::Debug,
-    sync::{
-        mpsc::{self, Receiver, Sender, TryRecvError},
-        Arc,
-    },
-};
+use std::{fmt::Debug, sync::Arc};
 
 use crate::{
-    control::UpdateChannel,
     gameobject::{
         field::{Cell, CellNeighbors},
         HasHealth, HasSolidity, Health, Solidity, SOLID,
     },
     rendering::View,
-    Camera, Gamestate, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, Velocity,
+    Camera, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, Velocity,
 };
 
 mod entity_controls;
 pub use entity_controls::EntityControls;
+pub mod registry;
 use graphics::{
     types::{Color, Scalar},
     Context,
 };
 use opengl_graphics::GlGraphics;
+
+use super::Field;
+
+pub trait HasEntity<'a, 'b: 'a> {
+    fn get_entity(&'b self) -> &'a Entity;
+
+    fn get_entity_mut(&'b mut self) -> &'a mut Entity;
+}
 
 #[derive(Debug)]
 pub struct Entity {
@@ -31,8 +33,6 @@ pub struct Entity {
     physbox: PhysBox,
     health: Health,
     solidity: Solidity,
-    current_cell: Option<(Arc<Cell>, Vec<Arc<Cell>>)>,
-    channel: (Sender<EntityControls>, Receiver<EntityControls>),
 }
 
 impl Entity {
@@ -43,22 +43,20 @@ impl Entity {
             physbox: PhysBox::new([0.0, 0.0, 1.0, 1.0].into())?,
             health: Health::new(10),
             solidity: SOLID,
-            current_cell: None,
-            channel: mpsc::channel(),
         })
     }
     /// Sets the entity's velocity in terms of its maximum velocity
-    pub fn set_velocity(&mut self, vel: Velocity) {
-        self.velocity = vel.normalize() * self.max_velocity;
+    pub fn set_velocity(&mut self, velocity: Velocity) {
+        self.velocity = velocity.normalize() * self.max_velocity;
     }
 
-    pub fn set_max_velocity(&mut self, v: Scalar) -> ScarabResult<()> {
-        if v <= 0.0 {
+    pub fn set_max_velocity(&mut self, max_velocity: Scalar) -> ScarabResult<()> {
+        if max_velocity <= 0.0 {
             return Err(ScarabError::RawString(
                 "Maximum velocity must be positive".to_string(),
             ));
         }
-        self.max_velocity = v;
+        self.max_velocity = max_velocity;
 
         Ok(())
     }
@@ -70,19 +68,12 @@ impl Entity {
         physbox
     }
 
-    fn current_cell(&self) -> Option<&Arc<Cell>> {
-        self.current_cell.as_ref().map(|(c, _o)| c)
+    /// Returns a callback function for resolving entity-entity collisions
+    pub fn game_tick(&mut self, field: &Field, dt: f64) -> ScarabResult<()> {
+        self.try_move(field, dt)
     }
 
-    fn update(&mut self, gamestate: &Gamestate, dt: f64) -> ScarabResult<()> {
-        self.try_move(gamestate, dt)?;
-
-        Ok(())
-    }
-
-    fn try_move(&mut self, gamestate: &Gamestate, dt: f64) -> ScarabResult<()> {
-        let f = gamestate.get_field();
-
+    fn try_move(&mut self, field: &Field, dt: f64) -> ScarabResult<()> {
         if self.velocity == [0.0, 0.0].into() {
             return Ok(());
         }
@@ -91,8 +82,9 @@ impl Entity {
         // Should create a new function to take into account the old current cell and its neighbors
         // at the very least only going through those. Even more so, we can add the edges that were
         // crossed.
-        if !self.current_cell.is_some() {
-            self.current_cell = f.cell_at(self.physbox.pos()).map(|c| {
+        let (cell, overlaps): (_, Vec<Arc<Cell>>) = field
+            .cell_at(self.physbox.pos())
+            .map(|c| {
                 let overlaps = c
                     .neighbors_overlapped(&self.physbox)
                     .iter()
@@ -100,10 +92,6 @@ impl Entity {
                     .collect();
                 (c, overlaps)
             })
-        }
-        let (cell, overlaps) = self
-            .current_cell
-            .as_ref()
             .ok_or_else(|| ScarabError::RawString("can't find current cell".to_string()))?;
 
         let new_pos = self.physbox.pos() + self.velocity * dt;
@@ -139,59 +127,19 @@ impl Entity {
                 Ok(())
             };
 
-            apply_movement_reductions(cell)?;
+            apply_movement_reductions(&cell)?;
 
             for o in overlaps {
-                apply_movement_reductions(o)?;
-            }
-        }
-
-        // TODO: switch to a separate "resolve entity collisions step"
-        // doing these collated will definite cause problems as the number
-        // of entities increases
-        if self.solidity.has_solidity() {
-            for physbox in gamestate.overlapping_entity_boxes(self, &new_box) {
-                new_box.shift_to_nonoverlapping(&physbox);
+                apply_movement_reductions(&o)?;
             }
         }
 
         self.physbox = new_box;
 
-        self.current_cell = None;
-
+        // TODO: switch to a separate "resolve entity collisions step"
+        // doing these collated will definite cause problems as the number
+        // of entities increases
         Ok(())
-    }
-}
-
-impl UpdateChannel<EntityControls> for Entity {
-    fn game_tick(&mut self, gamestate: &Gamestate, dt: f64) -> ScarabResult<()> {
-        self.update(gamestate, dt)
-    }
-
-    fn get_sender(&self) -> Sender<EntityControls> {
-        self.channel.0.clone()
-    }
-
-    fn consume_channel(&mut self) -> Option<Result<(), TryRecvError>> {
-        let res = self.channel.1.try_recv().map_or_else(
-            |err| match err {
-                TryRecvError::Empty => None,
-                other => Some(Err(other)),
-            },
-            |r| Some(Ok(r)),
-        )?;
-
-        if let Err(err) = res {
-            return Some(Err(err));
-        }
-
-        let cmd = res.unwrap();
-        match cmd {
-            EntityControls::SetMovement(v) => self.set_velocity(v),
-            EntityControls::Nop => {}
-        }
-
-        Some(Ok(()))
     }
 }
 
@@ -225,6 +173,24 @@ pub struct EntityView {
 }
 
 impl View for EntityView {
+    type Viewed = Entity;
+
+    fn render(
+        &self,
+        viewed: &Self::Viewed,
+        camera: &Camera,
+        ctx: Context,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()> {
+        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+            graphics::rectangle(self.color, rect, transform, gl);
+        }
+
+        Ok(())
+    }
+}
+
+impl View for &EntityView {
     type Viewed = Entity;
 
     fn render(
