@@ -5,15 +5,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+petgraph = { version = "0.6.2", features = ["serde-1"] }
 piston = "0.53.0"
 piston2d-graphics = "0.42.0"
 pistoncore-glutin_window = "0.69.0"
 piston2d-opengl_graphics = "0.81.0"
 # piston2d-shapes = { git = "ssh://git@github.com/rhaaaaawb/shapes.git", branch = "parsnips/qol" }
-piston2d-shapes = { path = "../shapes" }
-vecmath = "1.0.0"
+piston2d-shapes = { path = "../shapes", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
 thiserror = "1.0"
-uuid = { version = "1.0", features = ["v4"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+vecmath = "1.0.0"
 
 [lib]
 crate-type = ["rlib"]

@@ -1,3 +1,4 @@
+use core::slice::Iter;
 use graphics::{types::Color, Context};
 /// A field is a graph of rectangles (cells) that each have a (backup) rendering
 /// component and a collision (or non-collision) component
@@ -9,44 +10,39 @@ use graphics::{types::Color, Context};
 ///
 /// For simplicity, it's assumed that intra-cell movement is always possible
 use opengl_graphics::GlGraphics;
+use petgraph::{graph::NodeIndex, prelude::DiGraph, stable_graph::DefaultIx, visit::EdgeRef};
+use serde::{Deserialize, Serialize};
 use shapes::Point;
-use std::{
-    fmt::{Debug, Error, Formatter},
-    slice::Iter,
-    sync::Arc,
-};
+use std::fmt::Debug;
 
 use crate::{
     gameobject::Solidity, rendering::View, BoxEdge, Camera, HasBox, HasBoxMut, PhysBox,
-    ScarabResult,
+    ScarabError, ScarabResult,
 };
 
 use super::{HasSolidity, AIR, SOLID};
 
-#[derive(Debug, Clone)]
+/// A graph of `Cell`s on the field
+/// with the edges between them being the physical side of the cell where the edge appears
+/// and whether or not that edge is passable by solidity entering/exiting rules
+pub type FieldGraphInner = DiGraph<Cell, (BoxEdge, bool)>;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Field {
-    cells: Vec<Arc<Cell>>,
-    /// When edges[i][j] = Some(CellEdge) the edge between cells i and j
-    /// is on the edge of i denoted by the variant of `CellEdge`
-    edges: Vec<Vec<Option<BoxEdge>>>,
+    graph: FieldGraphInner,
 }
 
 impl Field {
     /// Given a list of cells, construct their edges
     pub fn new(cells: Vec<Cell>) -> ScarabResult<Self> {
-        let mut cnt = 0;
-        let mut cells: Vec<Arc<Cell>> = cells
-            .into_iter()
-            .map(|mut c| {
-                c.i = cnt;
-                cnt += 1;
-                Arc::new(c)
-            })
-            .collect();
+        let mut graph = FieldGraphInner::new();
 
-        let mut edges = vec![vec![None; cells.len()]; cells.len()];
+        for cell in cells {
+            let i = graph.add_node(cell);
+            graph.node_weight_mut(i).map(|c| c.i = i);
+        }
 
-        Field::build_cells(&mut cells, &mut edges);
+        Field::build_cells(&mut graph)?;
 
         // TODO: potential validation steps:
         // ensure that cells dont overlap (probably should be done before the set edges)
@@ -54,10 +50,10 @@ impl Field {
         //   but I don't know if that's the end of the world since this is only done
         //   on level loading
 
-        Ok(Self { cells, edges })
+        Ok(Self { graph })
     }
 
-    fn build_cells(cells: &mut Vec<Arc<Cell>>, edges: &mut Vec<Vec<Option<BoxEdge>>>) -> () {
+    fn build_cells(graph: &mut FieldGraphInner) -> ScarabResult<()> {
         // Find the bordering cells along the given edge,
         // and mark the appropriate graph edges
         // c: the current cell
@@ -68,105 +64,136 @@ impl Field {
         //     This part is not pulled into the macro due to some complications
         //     with typing because TileVec is unsigned.
         // edge: A `BoxEdge` variant
-        let mut cell_edges =
-            |c: &Cell, test_pos: Point, edge: BoxEdge, neighbors: &mut Vec<Arc<Cell>>| {
-                let mut test_pos = test_pos.clone();
+        fn cell_edges(
+            this_cell_idx: NodeIndex,
+            graph: &mut FieldGraphInner,
+            test_pos: Point,
+            edge: BoxEdge,
+        ) -> ScarabResult<()> {
+            let mut test_pos = test_pos.clone();
 
-                // We iterate in the direction is orthogonal to edge's axis
-                while edge.get_normal_component_of(&test_pos)
-                    < c.physbox.get_far_axis(edge.perpendicular_axis())
+            let this_cell_far_axis = Field::cell_at_idx(graph, this_cell_idx)?
+                .physbox
+                .get_far_axis(edge.perpendicular_axis());
+
+            // We iterate in the direction is orthogonal to edge's axis
+            while edge.get_normal_component_of(&test_pos) < this_cell_far_axis {
+                // Find the cell at the current 'test_pos'. If it exists and
+                // is a valid edge (i.e. can be exited and then entered)
+                // then add it to neighbors
+                // Then set the new test pos to the far end of the neighbor
+                let new_normal_component = if let Some(cell_at_test_pos) =
+                    Field::cell_at_pos_internal(graph.node_weights(), test_pos)
                 {
-                    // Find the cell at the current 'test_pos'. If it exists and
-                    // is a valid edge (i.e. can be exited and then entered)
-                    // then add it to neighbors
-                    // Then set the new test pos to the far end of the neighbor
-                    let new_normal_component = Field::cell_at_internal(&cells, test_pos)
-                        .map_or_else(
-                            || edge.get_normal_component_of(&test_pos) + 1.0,
-                            |n| {
-                                edges[c.i][n.i] = if c.solidity.exit_edge(edge)
-                                    && n.solidity.enter_edge(edge.opposite())
-                                {
-                                    Some(edge)
-                                } else {
-                                    None
-                                };
-                                neighbors.push(Arc::clone(&n));
-                                n.physbox.get_far_axis(edge.perpendicular_axis())
-                            },
-                        );
+                    let new_normal_component = cell_at_test_pos
+                        .physbox
+                        .get_far_axis(edge.perpendicular_axis());
+                    let edge_is_passable = Field::cell_at_idx(graph, this_cell_idx)?
+                        .solidity
+                        .exit_edge(edge)
+                        && cell_at_test_pos.solidity.enter_edge(edge.opposite());
 
-                    test_pos = match edge {
-                        BoxEdge::Top | BoxEdge::Bottom => Point {
-                            x: new_normal_component,
-                            y: test_pos.y,
-                        },
-                        BoxEdge::Left | BoxEdge::Right => Point {
-                            x: test_pos.x,
-                            y: new_normal_component,
-                        },
-                    };
-                }
-            };
+                    // Rust gives a warning about derefing 'graph' in a call to graph
+                    // if we put it immediately in the function call
+                    let cell_at_test_pos_idx = cell_at_test_pos.i;
+                    graph.update_edge(
+                        this_cell_idx,
+                        cell_at_test_pos_idx,
+                        (edge, edge_is_passable),
+                    );
+                    new_normal_component
+                } else {
+                    edge.get_normal_component_of(&test_pos) + 1.0
+                };
+
+                test_pos = match edge {
+                    BoxEdge::Top | BoxEdge::Bottom => Point {
+                        x: new_normal_component,
+                        y: test_pos.y,
+                    },
+                    BoxEdge::Left | BoxEdge::Right => Point {
+                        x: test_pos.x,
+                        y: new_normal_component,
+                    },
+                };
+            }
+
+            Ok(())
+        }
 
         // Initialize the neighbors and edges
-        for i in 0..cells.len() {
-            let mut cell = Arc::clone(&cells[i]);
-            let physbox = cell.physbox;
+        for cell_idx in graph.node_indices() {
+            let physbox = Field::cell_at_idx(graph, cell_idx)?.physbox;
             let mut test_pos;
-            let mut top_neighbors = Vec::new();
-            let mut left_neighbors = Vec::new();
-            let mut bottom_neighbors = Vec::new();
-            let mut right_neighbors = Vec::new();
 
             // Along the top edge
             test_pos = physbox.pos() - [0.0, 1.0];
-            cell_edges(&cell, test_pos, BoxEdge::Top, &mut top_neighbors);
+            cell_edges(cell_idx, graph, test_pos, BoxEdge::Top)?;
 
             // Along the left edge
             test_pos = physbox.pos() - [1.0, 0.0];
-            cell_edges(&cell, test_pos, BoxEdge::Left, &mut left_neighbors);
+            cell_edges(cell_idx, graph, test_pos, BoxEdge::Left)?;
 
             // Along the bottom edge
             test_pos = [physbox.left_x(), physbox.bottom_y()].into();
-            cell_edges(&cell, test_pos, BoxEdge::Bottom, &mut bottom_neighbors);
+            cell_edges(cell_idx, graph, test_pos, BoxEdge::Bottom)?;
 
             // Along the right edge
             test_pos = [physbox.right_x(), physbox.top_y()].into();
-            cell_edges(&cell, test_pos, BoxEdge::Right, &mut right_neighbors);
-
-            // Doing an unsafe `get_mut_unchecked` because we know this is the
-            // only place that owns the cells at the moment
-            unsafe {
-                let c = Arc::get_mut_unchecked(&mut cell);
-                c.top_neighbors = top_neighbors;
-                c.left_neighbors = left_neighbors;
-                c.bottom_neighbors = bottom_neighbors;
-                c.right_neighbors = right_neighbors;
-            }
+            cell_edges(cell_idx, graph, test_pos, BoxEdge::Right)?;
         }
+
+        Ok(())
     }
 
-    fn cell_at_internal(cells: &Vec<Arc<Cell>>, pos: Point) -> Option<Arc<Cell>> {
+    fn cell_at_idx(graph: &FieldGraphInner, idx: NodeIndex) -> ScarabResult<&Cell> {
+        graph
+            .node_weight(idx)
+            .ok_or_else(|| ScarabError::RawString("graph indexing failed for field".to_string()))
+    }
+
+    fn cell_at_pos_internal<'a, I: Iterator<Item = &'a Cell>>(
+        cells: I,
+        pos: Point,
+    ) -> Option<&'a Cell> {
         for c in cells {
             if c.physbox.contains_pos(pos) {
-                return Some(Arc::clone(c));
+                return Some(c);
             }
         }
         None
     }
 
-    pub fn cell_at(&self, pos: Point) -> Option<Arc<Cell>> {
+    pub fn cell_at_pos(&self, pos: Point) -> Option<&Cell> {
         // The real challenge of this will be to try and do it in less than O(n)
-        Field::cell_at_internal(&self.cells, pos)
+        Field::cell_at_pos_internal(self.graph.node_weights(), pos)
     }
 
     // pub fn is_on_border(&self, pos: Vec2, size: TileVec) -> bool {
     //     todo!()
     // }
+
+    /// Returns the cell in the top left corner of the physbox, as well as all
+    /// of the neighbors of the cell that thy physbox overlaps
+    pub fn neighbors_of_cell_overlapping_box(
+        &self,
+        cell: &Cell,
+        physbox: &PhysBox,
+    ) -> ScarabResult<CellNeighbors> {
+        let mut neighbors = CellNeighbors::new();
+
+        for graph_edge in self.graph.edges(cell.i) {
+            let neighbor = Field::cell_at_idx(&self.graph, graph_edge.target())?;
+            if physbox.has_overlap(&neighbor.physbox) {
+                neighbors.add_neighbor(neighbor, graph_edge.weight().0);
+            }
+        }
+
+        Ok(neighbors)
+    }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FieldView {
     pub solid_view: CellView,
     pub air_view: CellView,
@@ -193,7 +220,7 @@ impl View for FieldView {
         ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
-        for cell in &viewed.cells {
+        for cell in viewed.graph.node_weights() {
             let cell_view = self.view_for_cell(cell);
             cell_view.render(cell, camera, ctx, gl)?;
         }
@@ -201,103 +228,23 @@ impl View for FieldView {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Cell {
     /// This cell's index in the Field's `Vec<Cell>`
-    i: usize,
+    i: NodeIndex<DefaultIx>,
     /// Defines how entities can move into/out of this cell
     solidity: Solidity,
     /// The upper left corner and width/height of the cell
     physbox: PhysBox,
-    /// The Field indices of cells bordering this one along its top edge
-    top_neighbors: Vec<Arc<Cell>>,
-    /// The Field indices of cells bordering this one along its left edge
-    left_neighbors: Vec<Arc<Cell>>,
-    /// The Field indices of cells bordering this one along its bottom edge
-    bottom_neighbors: Vec<Arc<Cell>>,
-    /// The Field indices of cells bordering this one along its right edge
-    right_neighbors: Vec<Arc<Cell>>,
 }
 
 impl Cell {
     pub fn new(solidity: Solidity, physbox: PhysBox) -> Self {
         Self {
-            i: 0,
+            i: NodeIndex::new(0),
             solidity,
             physbox,
-            top_neighbors: vec![],
-            left_neighbors: vec![],
-            bottom_neighbors: vec![],
-            right_neighbors: vec![],
         }
-    }
-
-    fn edge_neighbors(&self, edge: BoxEdge) -> &Vec<Arc<Cell>> {
-        match edge {
-            BoxEdge::Top => &self.top_neighbors,
-            BoxEdge::Left => &self.left_neighbors,
-            BoxEdge::Bottom => &self.bottom_neighbors,
-            BoxEdge::Right => &self.right_neighbors,
-        }
-    }
-
-    /// Returns a list of the neighbors of this cell which the given physbox overlaps
-    pub fn neighbors_overlapped(&self, physbox: &PhysBox) -> Vec<(BoxEdge, Arc<Cell>)> {
-        self.physbox
-            .edges_crossed_by(physbox)
-            .into_iter()
-            .flat_map(|edge| {
-                self.edge_neighbors(edge)
-                    .iter()
-                    .map(move |cell| (edge, cell))
-            })
-            .filter(|(_edge, neighbor)| physbox.has_overlap(&neighbor.physbox))
-            .map(|(edge, neighbor)| (edge, Arc::clone(neighbor)))
-            .collect()
-    }
-}
-
-// Manually implementing Debug for Cell b/c otherwise it would create an
-// infinite loop between the neighbors.
-// The main difference is showing neighbor's indexes rather than their full val.
-impl Debug for Cell {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        f.debug_struct("Cell")
-            .field("i", &self.i)
-            .field("solidity", &self.solidity)
-            .field("physbox", &self.physbox)
-            .field(
-                "top_neighbors",
-                &self
-                    .top_neighbors
-                    .iter()
-                    .map(|c| c.i)
-                    .collect::<Vec<usize>>(),
-            )
-            .field(
-                "left_neighbors",
-                &self
-                    .left_neighbors
-                    .iter()
-                    .map(|c| c.i)
-                    .collect::<Vec<usize>>(),
-            )
-            .field(
-                "bottom_neighbors",
-                &self
-                    .bottom_neighbors
-                    .iter()
-                    .map(|c| c.i)
-                    .collect::<Vec<usize>>(),
-            )
-            .field(
-                "right_neighbors",
-                &self
-                    .right_neighbors
-                    .iter()
-                    .map(|c| c.i)
-                    .collect::<Vec<usize>>(),
-            )
-            .finish()
     }
 }
 
@@ -319,27 +266,15 @@ impl HasSolidity for Cell {
     }
 }
 
-// TODO: see if there's a way to not add extra impls for the Arc<Cell>
-impl HasBox for Arc<Cell> {
-    fn get_box(&self) -> &PhysBox {
-        &self.physbox
-    }
+#[derive(Debug, Clone, PartialEq)]
+pub struct CellNeighbors<'a> {
+    pub top: Vec<&'a Cell>,
+    pub left: Vec<&'a Cell>,
+    pub bottom: Vec<&'a Cell>,
+    pub right: Vec<&'a Cell>,
 }
 
-impl HasSolidity for Arc<Cell> {
-    fn get_solidity(&self) -> &Solidity {
-        &self.solidity
-    }
-}
-
-pub struct CellNeighbors {
-    pub top: Vec<Arc<Cell>>,
-    pub left: Vec<Arc<Cell>>,
-    pub bottom: Vec<Arc<Cell>>,
-    pub right: Vec<Arc<Cell>>,
-}
-
-impl CellNeighbors {
+impl<'a> CellNeighbors<'a> {
     pub fn new() -> Self {
         Self {
             top: Vec::new(),
@@ -349,7 +284,7 @@ impl CellNeighbors {
         }
     }
 
-    pub fn add_neighbor(&mut self, neighbor: Arc<Cell>, edge: BoxEdge) {
+    pub fn add_neighbor(&mut self, neighbor: &'a Cell, edge: BoxEdge) {
         match edge {
             BoxEdge::Top => self.top.push(neighbor),
             BoxEdge::Left => self.left.push(neighbor),
@@ -358,7 +293,7 @@ impl CellNeighbors {
         }
     }
 
-    pub fn get_neighbors(&self, edge: BoxEdge) -> &Vec<Arc<Cell>> {
+    pub fn get_neighbors(&self, edge: BoxEdge) -> &Vec<&'a Cell> {
         match edge {
             BoxEdge::Top => &self.top,
             BoxEdge::Left => &self.left,
@@ -367,16 +302,25 @@ impl CellNeighbors {
         }
     }
 
-    pub fn iter(&self) -> CellNeighborsIter {
-        CellNeighborsIter {
+    pub fn iter_by_edge(&self) -> CellNeighborsIterByEdge {
+        CellNeighborsIterByEdge {
             current_edge: BoxEdge::iter(),
             inner: &self,
         }
     }
+
+    pub fn iter_all(&self) -> std::vec::IntoIter<&Cell> {
+        let mut all_vec = vec![];
+        all_vec.extend_from_slice(&self.top);
+        all_vec.extend_from_slice(&self.left);
+        all_vec.extend_from_slice(&self.bottom);
+        all_vec.extend_from_slice(&self.right);
+        all_vec.into_iter()
+    }
 }
 
-impl From<Vec<(BoxEdge, Arc<Cell>)>> for CellNeighbors {
-    fn from(val: Vec<(BoxEdge, Arc<Cell>)>) -> Self {
+impl<'a> From<Vec<(BoxEdge, &'a Cell)>> for CellNeighbors<'a> {
+    fn from(val: Vec<(BoxEdge, &'a Cell)>) -> Self {
         let mut neighbors = CellNeighbors::new();
 
         for (edge, cell) in val {
@@ -387,13 +331,13 @@ impl From<Vec<(BoxEdge, Arc<Cell>)>> for CellNeighbors {
     }
 }
 
-pub struct CellNeighborsIter<'a> {
-    current_edge: Iter<'static, BoxEdge>,
-    inner: &'a CellNeighbors,
+pub struct CellNeighborsIterByEdge<'a> {
+    current_edge: Iter<'a, BoxEdge>,
+    inner: &'a CellNeighbors<'a>,
 }
 
-impl<'a> Iterator for CellNeighborsIter<'a> {
-    type Item = (BoxEdge, &'a Vec<Arc<Cell>>);
+impl<'a> Iterator for CellNeighborsIterByEdge<'a> {
+    type Item = (BoxEdge, &'a Vec<&'a Cell>);
 
     // TODO: there's a chance for slight optimizations here to avoid
     // the cloning of the vec.
@@ -404,7 +348,7 @@ impl<'a> Iterator for CellNeighborsIter<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CellView {
     pub color: Color,
 }
@@ -428,4 +372,173 @@ impl View for CellView {
 }
 
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+
+    fn create_test_field() -> (Vec<PhysBox>, Field) {
+        let boxes = vec![
+            PhysBox::new([0.0, 0.0, 10.0, 20.0]).unwrap(),
+            PhysBox::new([10.0, 10.0, 20.0, 30.0]).unwrap(),
+            PhysBox::new([10.0, 0.0, 40.0, 10.0]).unwrap(),
+            PhysBox::new([30.0, 10.0, 20.0, 50.0]).unwrap(),
+            PhysBox::new([0.0, 40.0, 30.0, 20.0]).unwrap(),
+            PhysBox::new([0.0, 20.0, 10.0, 20.0]).unwrap(),
+            PhysBox::new([50.0, 0.0, 1.0, 60.0]).unwrap(),
+            PhysBox::new([0.0, 60.0, 50.0, 1.0]).unwrap(),
+            PhysBox::new([0.0, -1.0, 50.0, 1.0]).unwrap(),
+            PhysBox::new([-1.0, 0.0, 1.0, 60.0]).unwrap(),
+        ];
+
+        let cell0 = Cell::new(SOLID, boxes[0].clone());
+        let cell1 = Cell::new(SOLID, boxes[1].clone());
+        let cell2 = Cell::new(AIR, boxes[2].clone());
+        let cell3 = Cell::new(AIR, boxes[3].clone());
+        let cell4 = Cell::new(AIR, boxes[4].clone());
+        let cell5 = Cell::new(AIR, boxes[5].clone());
+        let cell6 = Cell::new(SOLID, boxes[6].clone());
+        let cell7 = Cell::new(SOLID, boxes[7].clone());
+        let cell8 = Cell::new(SOLID, boxes[8].clone());
+        let cell9 = Cell::new(SOLID, boxes[9].clone());
+
+        let field = Field::new(vec![
+            cell0, cell1, cell2, cell3, cell4, cell5, cell6, cell7, cell8, cell9,
+        ])
+        .unwrap();
+
+        (boxes, field)
+    }
+
+    #[test]
+    fn cell_at_pos_works() {
+        let (boxes, field) = create_test_field();
+
+        for physbox in &boxes {
+            assert_eq!(field.cell_at_pos(physbox.pos()).unwrap().get_box(), physbox)
+        }
+
+        assert_eq!(
+            field
+                .cell_at_pos(boxes[0].pos() + [5.0, 5.0])
+                .unwrap()
+                .get_box(),
+            &boxes[0]
+        );
+
+        assert_eq!(
+            field
+                .cell_at_pos(boxes[1].pos() + [5.0, 5.0])
+                .unwrap()
+                .get_box(),
+            &boxes[1]
+        );
+
+        assert!(field.cell_at_pos([-1000.0, -1000.0].into()).is_none())
+    }
+
+    #[test]
+    fn neighbors_of_cell_overlapping_box_works_with_cell_physboxes() {
+        let (boxes, field) = create_test_field();
+
+        for physbox in &boxes {
+            let cell_at = field.cell_at_pos(physbox.pos()).unwrap();
+            assert_eq!(cell_at.get_box(), physbox);
+
+            let neighbors = field
+                .neighbors_of_cell_overlapping_box(cell_at, physbox)
+                .unwrap();
+            assert_eq!(neighbors, CellNeighbors::new());
+        }
+    }
+
+    #[test]
+    fn neighbors_of_cell_overlapping_box_works_in_middle_of_cell() {
+        let (boxes, field) = create_test_field();
+
+        let testbox = PhysBox::new([31.0, 21.0, 8.0, 8.0]).unwrap();
+        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        assert_eq!(cell_at.get_box(), &boxes[3]);
+
+        let neighbors = field
+            .neighbors_of_cell_overlapping_box(cell_at, &testbox)
+            .unwrap();
+        assert_eq!(neighbors, CellNeighbors::new());
+    }
+
+    #[test]
+    fn neighbors_of_cell_overlapping_box_works_on_right_edge() {
+        let (boxes, field) = create_test_field();
+
+        // Shift it over -6 x
+        let testbox = PhysBox::new([25.0, 21.0, 8.0, 8.0]).unwrap();
+        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        assert_eq!(cell_at.get_box(), &boxes[1]);
+
+        let neighbors = field
+            .neighbors_of_cell_overlapping_box(cell_at, &testbox)
+            .unwrap();
+
+        // It only has an overlapping neighbor on the new box's right
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Top), &Vec::<&Cell>::new());
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Left), &Vec::<&Cell>::new());
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Bottom),
+            &Vec::<&Cell>::new()
+        );
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Right),
+            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+        );
+    }
+
+    #[test]
+    fn neighbors_of_cell_overlapping_box_works_on_bottom_edge() {
+        let (boxes, field) = create_test_field();
+
+        // Shift it up -13 y
+        let testbox = PhysBox::new([31.0, 8.0, 8.0, 8.0]).unwrap();
+        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        assert_eq!(cell_at.get_box(), &boxes[2]);
+
+        let neighbors = field
+            .neighbors_of_cell_overlapping_box(cell_at, &testbox)
+            .unwrap();
+
+        // It only has an overlapping neighbor on the bottom
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Top), &Vec::<&Cell>::new());
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Left), &Vec::<&Cell>::new());
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Bottom),
+            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+        );
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Right),
+            &Vec::<&Cell>::new()
+        );
+    }
+
+    #[test]
+    fn neighbors_of_cell_overlapping_box_works_on_bottom_right_corner() {
+        let (boxes, field) = create_test_field();
+
+        // Shift it left -6 x and down +15 y
+        let testbox = PhysBox::new([25.0, 36.0, 8.0, 8.0]).unwrap();
+        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        assert_eq!(cell_at.get_box(), &boxes[1]);
+
+        let neighbors = field
+            .neighbors_of_cell_overlapping_box(cell_at, &testbox)
+            .unwrap();
+
+        // It has an overlapping neighbor on the bottom and right
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Top), &Vec::<&Cell>::new());
+        assert_eq!(neighbors.get_neighbors(BoxEdge::Left), &Vec::<&Cell>::new());
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Bottom),
+            &vec![field.cell_at_pos(boxes[4].pos()).unwrap()]
+        );
+        assert_eq!(
+            neighbors.get_neighbors(BoxEdge::Right),
+            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+        );
+    }
+}

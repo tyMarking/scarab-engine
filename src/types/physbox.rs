@@ -1,10 +1,11 @@
 use graphics::types::{Scalar, Vec2d};
+use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
 use super::BoxEdge;
 use crate::{Axis, ScarabError, ScarabResult};
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PhysBox {
     pos: Point,
     size: Size,

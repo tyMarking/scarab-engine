@@ -1,9 +1,10 @@
 use graphics::{types::Scalar, Context, Transformed};
+use serde::{Deserialize, Serialize};
 use shapes::Point;
 
 use crate::PhysBox;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Camera {
     /// The number of screen pixels per tile
     pixels_per_tile: u32,

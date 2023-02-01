@@ -1,22 +1,17 @@
-use std::{fmt::Debug, sync::Arc};
-
 use crate::{
-    gameobject::{
-        field::{Cell, CellNeighbors},
-        HasHealth, HasSolidity, Health, Solidity, SOLID,
-    },
+    gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
     rendering::View,
     Camera, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, Velocity,
 };
 
-mod entity_controls;
-pub use entity_controls::EntityControls;
 pub mod registry;
 use graphics::{
     types::{Color, Scalar},
     Context,
 };
 use opengl_graphics::GlGraphics;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::Field;
 
@@ -26,13 +21,14 @@ pub trait HasEntity<'a, 'b: 'a> {
     fn get_entity_mut(&'b mut self) -> &'a mut Entity;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Entity {
     velocity: Velocity,
     max_velocity: Scalar,
     physbox: PhysBox,
     health: Health,
     solidity: Solidity,
+    uuid: Uuid,
 }
 
 impl Entity {
@@ -43,8 +39,14 @@ impl Entity {
             physbox: PhysBox::new([0.0, 0.0, 1.0, 1.0].into())?,
             health: Health::new(10),
             solidity: SOLID,
+            uuid: Uuid::new_v4(),
         })
     }
+
+    pub fn uuid(&self) -> Uuid {
+        self.uuid
+    }
+
     /// Sets the entity's velocity in terms of its maximum velocity
     pub fn set_velocity(&mut self, velocity: Velocity) {
         self.velocity = velocity.normalize() * self.max_velocity;
@@ -82,33 +84,29 @@ impl Entity {
         // Should create a new function to take into account the old current cell and its neighbors
         // at the very least only going through those. Even more so, we can add the edges that were
         // crossed.
-        let (cell, overlaps): (_, Vec<Arc<Cell>>) = field
-            .cell_at(self.physbox.pos())
-            .map(|c| {
-                let overlaps = c
-                    .neighbors_overlapped(&self.physbox)
-                    .iter()
-                    .map(|(_edge, c)| Arc::clone(c))
-                    .collect();
-                (c, overlaps)
-            })
-            .ok_or_else(|| ScarabError::RawString("can't find current cell".to_string()))?;
+        let current_cell = field.cell_at_pos(self.physbox.pos()).ok_or_else(|| {
+            ScarabError::RawString("Couldn't find cell at current position".to_string())
+        })?;
+        let current_cell_overlaps =
+            field.neighbors_of_cell_overlapping_box(current_cell, &self.physbox)?;
 
         let new_pos = self.physbox.pos() + self.velocity * dt;
         let mut new_box = self.physbox.clone();
         new_box.set_pos(new_pos);
 
         // Cell Based collisions
-        if !new_box.is_fully_contained_by(&cell.get_box()) {
-            let mut apply_movement_reductions = |c: &Arc<Cell>| -> ScarabResult<()> {
-                let neighbors = CellNeighbors::from(c.neighbors_overlapped(&new_box));
-                for (edge, neighbors) in neighbors.iter() {
-                    for neighbor in neighbors {
-                        if (!c.get_solidity().exit_edge(edge)
-                            || !neighbor.get_solidity().enter_edge(edge))
+        if !new_box.is_fully_contained_by(&current_cell.get_box()) {
+            let mut apply_movement_reductions = |from_this_cell: &Cell| -> ScarabResult<()> {
+                let from_cells_neighbors =
+                    field.neighbors_of_cell_overlapping_box(from_this_cell, &new_box)?;
+
+                for (edge, neighbors_on_edge) in from_cells_neighbors.iter_by_edge() {
+                    for neighbor in neighbors_on_edge {
+                        if (!from_this_cell.get_solidity().exit_edge(edge)
+                            || !neighbor.get_solidity().enter_edge(edge.opposite()))
                             && self.velocity.is_reduced_by_edge(edge)
                         {
-                            new_box.set_touching_edge(&c.get_box(), edge);
+                            new_box.set_touching_edge(&from_this_cell.get_box(), edge);
                         }
                     }
 
@@ -116,21 +114,21 @@ impl Entity {
                     // entering into a new neighbor because this can lead to tricky behavoir
                     // because at present, movement is not defined when the entity is not
                     // fully contained by some number of cells
-                    if neighbors.len() == 0
+                    if neighbors_on_edge.len() == 0
                         && self.velocity.is_reduced_by_edge(edge)
-                        && c.get_box().is_edge_crossed_by(&new_box, edge)
+                        && from_this_cell.get_box().is_edge_crossed_by(&new_box, edge)
                     {
-                        new_box.set_touching_edge(&c.get_box(), edge);
+                        new_box.set_touching_edge(&from_this_cell.get_box(), edge);
                     }
                 }
 
                 Ok(())
             };
 
-            apply_movement_reductions(&cell)?;
+            apply_movement_reductions(&current_cell)?;
 
-            for o in overlaps {
-                apply_movement_reductions(&o)?;
+            for overlap in current_cell_overlaps.iter_all() {
+                apply_movement_reductions(overlap)?;
             }
         }
 
@@ -167,7 +165,7 @@ impl HasSolidity for Entity {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EntityView {
     pub color: Color,
 }

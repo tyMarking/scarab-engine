@@ -3,13 +3,14 @@ pub mod field;
 
 pub use entity::Entity;
 pub use field::{Cell, Field};
+use serde::{Deserialize, Serialize};
 
 use crate::BoxEdge;
 
 /// Represents whether the typical entity can enter/exit a cell from each side
 /// The typical solid cell will be 255 or 15, while the typical navigable cell
 /// will be 0.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Solidity(pub u8);
 
 pub const SOLID: Solidity = Solidity(255);
@@ -87,7 +88,7 @@ pub trait HasSolidity {
     fn get_solidity(&self) -> &Solidity;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Hash)]
 pub struct Health {
     curr: u32,
     max: u32,

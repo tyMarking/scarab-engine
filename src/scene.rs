@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use graphics::Context;
 use opengl_graphics::GlGraphics;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     gameobject::{
@@ -12,7 +13,7 @@ use crate::{
     Camera, ScarabResult,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Scene<E> {
     field: Field,
     field_view: FieldView,
@@ -44,19 +45,11 @@ impl<E: RegisteredEntity> Scene<E> {
 
     // TODO: rethink if the entity views should be refs or not
     pub fn register_entity(&mut self, to_register: E) -> ScarabResult<()> {
-        self.entity_registry.push(to_register);
-        Ok(())
+        self.entity_registry.register(to_register)
     }
 
     pub fn get_field(&self) -> &Field {
         &self.field
-    }
-
-    pub fn update_entity_inputs(&mut self) -> ScarabResult<()> {
-        for registered_entity in &mut self.entity_registry {
-            registered_entity.maybe_exhaust_channel()?;
-        }
-        Ok(())
     }
 
     pub fn tick_entities(&mut self, dt: f64) -> ScarabResult<()> {
@@ -101,6 +94,11 @@ impl<E: RegisteredEntity> Scene<E> {
     //     // }
     //     Ok(())
     // }
+
+    // TODO! Find a way to pin the return type of this to a specific type within the registry
+    pub fn player_mut(&mut self) -> Option<&mut E> {
+        self.entity_registry.iter_mut().next()
+    }
 }
 
 // TODO: how to renderrrrr a game state in the different layers?

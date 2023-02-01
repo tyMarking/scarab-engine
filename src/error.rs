@@ -1,4 +1,5 @@
 use thiserror::Error;
+use uuid::Uuid;
 
 use crate::gameobject::entity::registry::ControlError;
 
@@ -18,4 +19,6 @@ pub enum ScarabError {
     FieldPosition,
     #[error(transparent)]
     ControlError(#[from] ControlError),
+    #[error("Attempted to register an entity with a pre-existing UUID: {0}")]
+    EntityRegistration(Uuid),
 }

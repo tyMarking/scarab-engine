@@ -2,13 +2,15 @@ use core::ops::{Add, Mul, Sub};
 use std::slice::Iter;
 
 use graphics::types::{Scalar, Vec2d};
+use serde::{Deserialize, Serialize};
 use shapes::Point;
 
 pub mod physbox;
 
 pub use physbox::*;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BoxEdge {
     Top,
     Left,
@@ -16,7 +18,7 @@ pub enum BoxEdge {
     Right,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(usize)]
 pub enum Axis {
     X,
@@ -69,7 +71,7 @@ impl BoxEdge {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Velocity {
     pub x: Scalar,
     pub y: Scalar,
@@ -156,4 +158,8 @@ impl From<Vec2d> for Velocity {
     fn from(v: Vec2d) -> Self {
         Self { x: v[0], y: v[1] }
     }
+}
+
+pub trait HasUuid {
+    fn uuid(&self) -> Uuid;
 }
