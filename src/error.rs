@@ -5,7 +5,7 @@ use crate::gameobject::entity::registry::ControlError;
 
 pub type ScarabResult<T> = Result<T, ScarabError>;
 
-#[derive(Debug, Error, PartialEq)]
+#[derive(Debug, Error)]
 pub enum ScarabError {
     #[error("Unable to get a GPU Adapter")]
     RequestAdapterError,
@@ -21,4 +21,6 @@ pub enum ScarabError {
     ControlError(#[from] ControlError),
     #[error("Attempted to register an entity with a pre-existing UUID: {0}")]
     EntityRegistration(Uuid),
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
 }

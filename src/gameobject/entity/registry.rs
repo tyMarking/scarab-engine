@@ -47,6 +47,18 @@ impl<E> EntityRegistry<E> {
         Ok(())
     }
 
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub fn get_one(&self, i: usize) -> Option<&E> {
+        self.inner.get(i)
+    }
+
+    pub fn get_one_mut(&mut self, i: usize) -> Option<&mut E> {
+        self.inner.get_mut(i)
+    }
+
     pub fn iter(&self) -> core::slice::Iter<'_, E> {
         self.inner.iter()
     }

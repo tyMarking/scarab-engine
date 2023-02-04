@@ -8,9 +8,10 @@ use crate::{
     gameobject::{
         entity::registry::{EntityRegistry, RegisteredEntity},
         field::{Field, FieldView},
+        HasSolidity,
     },
     rendering::View,
-    Camera, ScarabResult,
+    Camera, HasBox, HasBoxMut, ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,7 +44,6 @@ impl<E: RegisteredEntity> Scene<E> {
         Ok(())
     }
 
-    // TODO: rethink if the entity views should be refs or not
     pub fn register_entity(&mut self, to_register: E) -> ScarabResult<()> {
         self.entity_registry.register(to_register)
     }
@@ -53,52 +53,43 @@ impl<E: RegisteredEntity> Scene<E> {
     }
 
     pub fn tick_entities(&mut self, dt: f64) -> ScarabResult<()> {
-        // fn get_overlaps<'a, E: RegisteredEntity>(
-        //     others: OthersIter<'a, E>,
-        //     this_entity: &Entity,
-        // ) -> Vec<PhysBox> {
-        //     others
-        //         .filter(|r| r.inner_entity().get_solidity().has_solidity())
-        //         .filter_map(|r| {
-        //             let projected = r.inner_entity().get_projected_box();
-        //             if this_entity.get_box().has_overlap(&projected) {
-        //                 Some(projected)
-        //             } else if this_entity
-        //                 .get_box()
-        //                 .has_overlap(r.inner_entity().get_box())
-        //             {
-        //                 Some(*r.inner_entity().get_box())
-        //             } else {
-        //                 None
-        //             }
-        //         })
-        //         .collect()
-        // }
-
         for registered_entity in &mut self.entity_registry {
             registered_entity
                 .inner_entity_mut()
                 .game_tick(&self.field, dt)?;
         }
 
+        // This is kinda gross, but I don't really know how else to do it
+        // we'll see later how necessary it is to change
+        for this_index in 0..self.entity_registry.len() {
+            if let Some(this_one) = self.entity_registry.get_one(this_index) {
+                if !this_one.inner_entity().get_solidity().has_solidity() {
+                    continue;
+                }
+
+                let this_one_box = *this_one.inner_entity().get_box();
+
+                for other_index in 0..this_index {
+                    if this_index == other_index {
+                        continue;
+                    }
+                    if let Some(other_one) = self.entity_registry.get_one_mut(other_index) {
+                        if other_one.inner_entity().get_solidity().has_solidity() {
+                            other_one
+                                .inner_entity_mut()
+                                .get_box_mut()
+                                .shift_to_nonoverlapping(&this_one_box);
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
-
-    // fn resolve_entity_collisions(&mut self) -> ScarabResult<()> {
-    //     // Entity Based collisions are lazy in terms of solidity.
-    //     // As long as both have any solidity the collision will happen
-    //     // if self.solidity.has_solidity() {
-    //     //     for physbox in gamestate.overlapping_entity_boxes(self, &new_box) {
-    //     //         new_box.shift_to_nonoverlapping(&physbox);
-    //     //     }
-    //     // }
-    //     Ok(())
-    // }
 
     // TODO! Find a way to pin the return type of this to a specific type within the registry
     pub fn player_mut(&mut self) -> Option<&mut E> {
         self.entity_registry.iter_mut().next()
     }
 }
-
-// TODO: how to renderrrrr a game state in the different layers?
