@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
 use super::BoxEdge;
-use crate::{Axis, ScarabError, ScarabResult};
+use crate::{Axis, PhysicsError, PhysicsResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct PhysBox {
@@ -12,15 +12,15 @@ pub struct PhysBox {
 }
 
 impl PhysBox {
-    fn validate(_point: Point, size: Size) -> ScarabResult<()> {
+    fn validate(_point: Point, size: Size) -> PhysicsResult<()> {
         if size.w > 0.0 && size.h > 0.0 {
             Ok(())
         } else {
-            Err(ScarabError::PhysBoxSize)
+            Err(PhysicsError::PhysBoxSize)
         }
     }
 
-    pub fn new([x, y, w, h]: [f64; 4]) -> ScarabResult<Self> {
+    pub fn new([x, y, w, h]: [f64; 4]) -> PhysicsResult<Self> {
         let pos = [x, y].into();
         let size = [w, h].into();
         Self::validate(pos, size)?;
@@ -43,44 +43,53 @@ impl PhysBox {
         self.size
     }
 
-    pub fn set_size(&mut self, size: Size) -> ScarabResult<()> {
+    pub fn set_size(&mut self, size: Size) -> PhysicsResult<()> {
         Self::validate(self.pos, size)?;
         self.size = size;
         Ok(())
     }
 
+    /// Gets the y coordinate of the top edge
     pub fn top_y(&self) -> Scalar {
         self.pos.y
     }
 
+    /// Gets the x coordinate of the left edge
     pub fn left_x(&self) -> Scalar {
         self.pos.x
     }
 
+    /// Gets the y coordinate of the bottom edge
     pub fn bottom_y(&self) -> Scalar {
         self.pos.y + self.size.h
     }
 
+    /// Gets the x coordinate of the right edge
     pub fn right_x(&self) -> Scalar {
         self.pos.x + self.size.w
     }
 
+    /// Translates self so that the y value of the top edge is 'val'
     pub fn set_top_y(&mut self, val: Scalar) {
         self.pos.y = val;
     }
 
+    /// Translates self so that the x value of the left edge is 'val'
     pub fn set_left_x(&mut self, val: Scalar) {
         self.pos.x = val;
     }
 
+    /// Translates self so that the y value of the bottom edge is 'val'
     pub fn set_bottom_y(&mut self, val: Scalar) {
         self.pos.y = val - self.size.w;
     }
 
+    /// Translates self so that the x value of the right edge is 'val'
     pub fn set_right_x(&mut self, val: Scalar) {
         self.pos.x = val - self.size.w;
     }
 
+    /// Computes the area of self
     pub fn area(&self) -> Scalar {
         self.size.w * self.size.h
     }
@@ -106,11 +115,17 @@ impl PhysBox {
         }
     }
 
-    /// Moves `self` so that its `edge` coincides with `other`s `edge`
+    /// Moves `self` so that its and `other`'s `edge` coincide
     pub fn set_touching_edge(&mut self, other: &Self, edge: BoxEdge) {
         self.set_edge(other.get_edge(edge), edge)
     }
 
+    /// Moves `self` so that its `this_edge` coincides with `other`'s `this_edge.opposite()`
+    pub fn set_touching_opposite_edge(&mut self, other: &Self, this_edge: BoxEdge) {
+        self.set_edge(other.get_edge(this_edge.opposite()), this_edge)
+    }
+
+    /// Gets the corresponding component of the bottom right corner
     pub fn get_far_axis(&self, axis: Axis) -> Scalar {
         match axis {
             Axis::X => self.right_x(),
@@ -118,6 +133,7 @@ impl PhysBox {
         }
     }
 
+    /// Gets the corresponding component of the top left corner
     pub fn get_near_axis(&self, axis: Axis) -> Scalar {
         match axis {
             Axis::X => self.left_x(),
@@ -127,6 +143,18 @@ impl PhysBox {
 
     /// Moves `self` so it does not overlap with `other`.
     /// Does nothing if they already don't overlap.
+    /// ```
+    /// use scarab_engine::PhysBox;
+    ///
+    /// let box1 = PhysBox::new([0.0, 0.0, 5.0, 5.0].into()).unwrap();
+    /// let mut box2 = PhysBox::new([2.0, 4.0, 5.0, 5.0].into()).unwrap();
+    ///
+    /// assert!(box1.has_overlap(&box2));
+    ///
+    /// box2.shift_to_nonoverlapping(&box1);
+    /// // Even though box1 and box2 still touch on box1's right axis they don't overlap
+    /// assert_eq!(box2, PhysBox::new([2.0, 5.0, 5.0, 5.0].into()).unwrap());
+    /// ```
     pub fn shift_to_nonoverlapping(&mut self, other: &Self) {
         if !self.has_overlap(other) {
             return;
@@ -148,15 +176,12 @@ impl PhysBox {
             }
         });
 
-        if let Some((edge, diff)) = shift_edge_opt {
-            self.set_edge(
-                self.get_edge(*edge)
-                    + *diff * edge.opposite().direction()[edge.parallel_axis() as usize],
-                *edge,
-            )
+        if let Some((edge, _diff)) = shift_edge_opt {
+            self.set_touching_opposite_edge(other, *edge)
         }
     }
 
+    /// Is the pos contained in the box
     /// For clarity this uses >= and <
     /// i.e. The top and left edges are inclusive, and the bottom and right ones are exclusive
     /// with the bottom left and top right corners also excluded.
@@ -177,7 +202,21 @@ impl PhysBox {
             && (pos.y <= bottom_right.y)
     }
 
-    /// For clarity this uses < and > not <= and >=
+    /// Do self and other have any overlap.
+    /// For clarity this uses < and > not <= and >=, i.e. two cells that share
+    /// an edge do not overlap.
+    /// ```
+    /// use scarab_engine::PhysBox;
+    ///
+    /// let box1 = PhysBox::new([0.0, 0.0, 5.0, 5.0].into()).unwrap();
+    /// let mut box2 = PhysBox::new([3.0, 3.0, 5.0, 5.0].into()).unwrap();
+    ///
+    /// assert!(box1.has_overlap(&box2));
+    ///
+    /// box2.shift_to_nonoverlapping(&box1);
+    /// // Even though box1 and box2 still touch on box1's right axis they don't overlap
+    /// assert!(!box1.has_overlap(&box2));
+    /// ```
     pub fn has_overlap(&self, other: &Self) -> bool {
         let this_bottom_right = self.pos + self.size;
         let other_bottom_right = other.pos + other.size;
@@ -255,49 +294,53 @@ impl HasBoxMut for PhysBox {
     }
 }
 
+/// A trait for game objects that wrap a physbox
 pub trait HasBox {
     fn get_box(&self) -> &PhysBox;
 }
 
+/// A trait for game objects that wrap a mutable physbox
 pub trait HasBoxMut {
     fn get_box_mut(&mut self) -> &mut PhysBox;
 }
 
 #[cfg(test)]
 mod test {
+    use crate::PhysicsError;
+
     use super::*;
 
-    // #[test]
-    // fn negative_sized_rect_not_allowed() {
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, 1.0, -4.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, -0.1, 4.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, -10000.0, -2.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    // }
+    #[test]
+    fn negative_sized_rect_not_allowed() {
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, 1.0, -4.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, -0.1, 4.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, -10000.0, -2.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+    }
 
-    // #[test]
-    // fn zero_sized_rect_not_allowed() {
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, 0.0, 0.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, 0.0, 4.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    //     assert_eq!(
-    //         PhysBox::new([0.0, 0.0, 1.0, 0.0]).unwrap_err(),
-    //         ScarabError::PhysBoxSize
-    //     );
-    // }
+    #[test]
+    fn zero_sized_rect_not_allowed() {
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, 0.0, 0.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, 0.0, 4.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+        assert_eq!(
+            PhysBox::new([0.0, 0.0, 1.0, 0.0]).unwrap_err(),
+            PhysicsError::PhysBoxSize
+        );
+    }
 
     #[test]
     /// All Points on the top and left edges excluding those on right or bottom corner

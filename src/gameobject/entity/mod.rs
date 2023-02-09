@@ -1,7 +1,7 @@
 use crate::{
     gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
     rendering::View,
-    Camera, HasBox, HasBoxMut, PhysBox, ScarabError, ScarabResult, Velocity,
+    Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
 };
 
 pub mod registry;
@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use super::Field;
 
+/// A trait for game objects that wrap/own an entity
 pub trait HasEntity<'a, 'b: 'a> {
     fn get_entity(&'b self) -> &'a Entity;
 
@@ -32,7 +33,7 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub fn new() -> ScarabResult<Self> {
+    pub fn new() -> PhysicsResult<Self> {
         Ok(Self {
             velocity: [0.0, 0.0].into(),
             max_velocity: 1.0,
@@ -47,20 +48,26 @@ impl Entity {
         self.uuid
     }
 
-    /// Sets the entity's velocity in terms of its maximum velocity
+    /// Sets the entity's velocity, limited by its maximum velocity
     pub fn set_velocity(&mut self, velocity: Velocity) {
-        self.velocity = velocity.normalize() * self.max_velocity;
+        self.velocity = if velocity.magnitude_sq() <= self.max_velocity * self.max_velocity {
+            velocity
+        } else {
+            velocity.normalize() * self.max_velocity
+        }
     }
 
-    pub fn set_max_velocity(&mut self, max_velocity: Scalar) -> ScarabResult<()> {
+    pub fn set_max_velocity(&mut self, max_velocity: Scalar) -> PhysicsResult<()> {
         if max_velocity <= 0.0 {
-            return Err(ScarabError::RawString(
-                "Maximum velocity must be positive".to_string(),
-            ));
+            return Err(PhysicsError::MaxVelocity);
         }
         self.max_velocity = max_velocity;
 
         Ok(())
+    }
+
+    pub fn get_max_velocity(&self) -> Scalar {
+        self.max_velocity
     }
 
     /// Get the position of the entity after its next movement assuming no collisions
@@ -71,11 +78,13 @@ impl Entity {
     }
 
     /// Returns a callback function for resolving entity-entity collisions
-    pub fn game_tick(&mut self, field: &Field, dt: f64) -> ScarabResult<()> {
+    pub fn game_tick(&mut self, field: &Field, dt: f64) -> PhysicsResult<()> {
         self.try_move(field, dt)
     }
 
-    fn try_move(&mut self, field: &Field, dt: f64) -> ScarabResult<()> {
+    /// Attempts to move this entity according to its velocity until it collides
+    /// with any cells
+    fn try_move(&mut self, field: &Field, dt: f64) -> PhysicsResult<()> {
         if self.velocity == [0.0, 0.0].into() {
             return Ok(());
         }
@@ -84,9 +93,9 @@ impl Entity {
         // Should create a new function to take into account the old current cell and its neighbors
         // at the very least only going through those. Even more so, we can add the edges that were
         // crossed.
-        let current_cell = field.cell_at_pos(self.physbox.pos()).ok_or_else(|| {
-            ScarabError::RawString("Couldn't find cell at current position".to_string())
-        })?;
+        let current_cell = field
+            .cell_at_pos(self.physbox.pos())
+            .ok_or_else(|| PhysicsError::NoFieldCell(self.physbox.pos()))?;
         let current_cell_overlaps =
             field.neighbors_of_cell_overlapping_box(current_cell, &self.physbox)?;
 
@@ -96,7 +105,7 @@ impl Entity {
 
         // Cell Based collisions
         if !new_box.is_fully_contained_by(&current_cell.get_box()) {
-            let mut apply_movement_reductions = |from_this_cell: &Cell| -> ScarabResult<()> {
+            let mut apply_movement_reductions = |from_this_cell: &Cell| -> PhysicsResult<()> {
                 let from_cells_neighbors =
                     field.neighbors_of_cell_overlapping_box(from_this_cell, &new_box)?;
 
@@ -157,6 +166,10 @@ impl HasHealth for Entity {
     fn get_health(&self) -> &Health {
         &self.health
     }
+
+    fn get_health_mut(&mut self) -> &mut Health {
+        &mut self.health
+    }
 }
 
 impl HasSolidity for Entity {
@@ -203,5 +216,51 @@ impl View for &EntityView {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use crate::PhysicsError;
+
+    // Doing a lot of square roots with the vector math propogates the floating-point error
+    // a bunch, this is just to make sure it's reasonably accurate
+    const EPSILON: f64 = 0.000_000_000_1;
+
+    #[test]
+    fn set_max_velocity_fails_with_negative() {
+        let mut entity = Entity::new().unwrap();
+
+        assert_eq!(
+            entity.set_max_velocity(-1.0).unwrap_err(),
+            PhysicsError::MaxVelocity
+        );
+        assert_eq!(
+            entity.set_max_velocity(0.0).unwrap_err(),
+            PhysicsError::MaxVelocity
+        );
+    }
+
+    #[test]
+    fn set_velocity_bounded_by_max_velocity_maintains_angle() {
+        let mut entity = Entity::new().unwrap();
+
+        entity.set_max_velocity(20.0).unwrap();
+
+        let velocity = [20.0, 20.0].into();
+        entity.set_velocity(velocity);
+        assert!((400.0 - entity.velocity.magnitude_sq()) <= EPSILON);
+        assert!((entity.velocity.angle() - velocity.angle()).abs() < EPSILON);
+
+        let velocity = [-100.0, 20.0].into();
+        entity.set_velocity(velocity);
+        assert!((400.0 - entity.velocity.magnitude_sq()) <= EPSILON);
+        assert!((entity.velocity.angle() - velocity.angle()).abs() < EPSILON);
+
+        let velocity = [10.0, 10.0].into();
+        entity.set_velocity(velocity);
+        assert_eq!(entity.velocity, velocity);
     }
 }

@@ -1,14 +1,5 @@
 use core::slice::Iter;
 use graphics::{types::Color, Context};
-/// A field is a graph of rectangles (cells) that each have a (backup) rendering
-/// component and a collision (or non-collision) component
-///
-/// The cells have a solidity field (defined in mod.rs) which dictates
-/// how standard entities can move between cells.
-/// In the construction of a gamefield from the given cells, their solidity is
-/// used to construct a graph for determining if inter-cell movement is possible
-///
-/// For simplicity, it's assumed that intra-cell movement is always possible
 use opengl_graphics::GlGraphics;
 use petgraph::{graph::NodeIndex, prelude::DiGraph, stable_graph::DefaultIx, visit::EdgeRef};
 use serde::{Deserialize, Serialize};
@@ -17,24 +8,32 @@ use std::fmt::Debug;
 
 use crate::{
     gameobject::Solidity, rendering::View, BoxEdge, Camera, HasBox, HasBoxMut, PhysBox,
-    ScarabError, ScarabResult,
+    PhysicsError, PhysicsResult, ScarabResult,
 };
 
-use super::{HasSolidity, AIR, SOLID};
+use super::{HasSolidity, NO_SOLIDITY, SOLID};
 
-/// A graph of `Cell`s on the field
-/// with the edges between them being the physical side of the cell where the edge appears
-/// and whether or not that edge is passable by solidity entering/exiting rules
+/// A graph of `Cell`s on the field, with the edges between them being the
+/// physical side of the cell where the edge appears, and whether or not
+/// that edge is passable by solidity entering/exiting rules
 pub type FieldGraphInner = DiGraph<Cell, (BoxEdge, bool)>;
 
+/// A field is a graph of rectangles ([cells](Cell)) that aids in movement within a scene
+///
+/// The cells have a [solidity](Solidity) field which dictates
+/// how standard entities can move between cells.
+/// In the construction of a field from the given cells, their solidity is
+/// used to construct a graph for determining if inter-cell movement is possible
+///
+/// For simplicity, it's assumed that intra-cell movement is always possible
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Field {
     graph: FieldGraphInner,
 }
 
 impl Field {
-    /// Given a list of cells, construct their edges
-    pub fn new(cells: Vec<Cell>) -> ScarabResult<Self> {
+    /// Given a list of cells, turns them into a field
+    pub fn new(cells: Vec<Cell>) -> PhysicsResult<Self> {
         let mut graph = FieldGraphInner::new();
 
         for cell in cells {
@@ -45,15 +44,17 @@ impl Field {
         Field::build_cells(&mut graph)?;
 
         // TODO: potential validation steps:
-        // ensure that cells dont overlap (probably should be done before the set edges)
-        //   it most likely can't be done exhaustively < O(n^2)
-        //   but I don't know if that's the end of the world since this is only done
-        //   on level loading
+        // - ensure that cells dont overlap (probably should be done before the edges are built)
+        //     it most likely can't be done exhaustively < O(n^2)
+        //     but I don't know if that's the end of the world since this is only done
+        //     on level loading
+        // - ensure there are no gaps in between cells
+        //     this would probably take a very long time unless I can come up with a clever alg
 
         Ok(Self { graph })
     }
 
-    fn build_cells(graph: &mut FieldGraphInner) -> ScarabResult<()> {
+    fn build_cells(graph: &mut FieldGraphInner) -> PhysicsResult<()> {
         // Find the bordering cells along the given edge,
         // and mark the appropriate graph edges
         // c: the current cell
@@ -69,7 +70,7 @@ impl Field {
             graph: &mut FieldGraphInner,
             test_pos: Point,
             edge: BoxEdge,
-        ) -> ScarabResult<()> {
+        ) -> PhysicsResult<()> {
             let mut test_pos = test_pos.clone();
 
             let this_cell_far_axis = Field::cell_at_idx(graph, this_cell_idx)?
@@ -78,9 +79,10 @@ impl Field {
 
             // We iterate in the direction is orthogonal to edge's axis
             while edge.get_normal_component_of(&test_pos) < this_cell_far_axis {
-                // Find the cell at the current 'test_pos'. If it exists and
-                // is a valid edge (i.e. can be exited and then entered)
-                // then add it to neighbors
+                // Find the cell at the current 'test_pos'. If it exists,
+                // add the edge it's on to neighbors along with wither or not the
+                // edge is typically passable (the corresponding edge can be entered
+                // or exited for each cell)
                 // Then set the new test pos to the far end of the neighbor
                 let new_normal_component = if let Some(cell_at_test_pos) =
                     Field::cell_at_pos_internal(graph.node_weights(), test_pos)
@@ -146,16 +148,19 @@ impl Field {
         Ok(())
     }
 
-    fn cell_at_idx(graph: &FieldGraphInner, idx: NodeIndex) -> ScarabResult<&Cell> {
+    fn cell_at_idx(graph: &FieldGraphInner, idx: NodeIndex) -> PhysicsResult<&Cell> {
         graph
             .node_weight(idx)
-            .ok_or_else(|| ScarabError::RawString("graph indexing failed for field".to_string()))
+            .ok_or_else(|| PhysicsError::FieldIndex(idx.index()))
     }
 
     fn cell_at_pos_internal<'a, I: Iterator<Item = &'a Cell>>(
         cells: I,
         pos: Point,
     ) -> Option<&'a Cell> {
+        // The real challenge of this will be to try and do it in less than O(n)
+        // I could see some sort of spanning tree setup to do this more quickly
+        // in as little as O(log(n))
         for c in cells {
             if c.physbox.contains_pos(pos) {
                 return Some(c);
@@ -164,22 +169,18 @@ impl Field {
         None
     }
 
+    /// Returns the cell at the given point on the field if any exist
     pub fn cell_at_pos(&self, pos: Point) -> Option<&Cell> {
-        // The real challenge of this will be to try and do it in less than O(n)
         Field::cell_at_pos_internal(self.graph.node_weights(), pos)
     }
 
-    // pub fn is_on_border(&self, pos: Vec2, size: TileVec) -> bool {
-    //     todo!()
-    // }
-
-    /// Returns the cell in the top left corner of the physbox, as well as all
-    /// of the neighbors of the cell that thy physbox overlaps
+    /// Given a cell on the field and a physbox, returns the neighbors of
+    /// the cell that the physbox overlaps.
     pub fn neighbors_of_cell_overlapping_box(
         &self,
         cell: &Cell,
         physbox: &PhysBox,
-    ) -> ScarabResult<CellNeighbors> {
+    ) -> PhysicsResult<CellNeighbors> {
         let mut neighbors = CellNeighbors::new();
 
         for graph_edge in self.graph.edges(cell.i) {
@@ -204,7 +205,7 @@ impl FieldView {
     fn view_for_cell(&self, cell: &Cell) -> &CellView {
         match cell.solidity {
             SOLID => &self.solid_view,
-            AIR => &self.air_view,
+            NO_SOLIDITY => &self.air_view,
             _ => &self.default_view,
         }
     }
@@ -266,12 +267,13 @@ impl HasSolidity for Cell {
     }
 }
 
+/// Represents the neighbors of a cell organized by what edge the neighbor is on
 #[derive(Debug, Clone, PartialEq)]
 pub struct CellNeighbors<'a> {
-    pub top: Vec<&'a Cell>,
-    pub left: Vec<&'a Cell>,
-    pub bottom: Vec<&'a Cell>,
-    pub right: Vec<&'a Cell>,
+    top: Vec<&'a Cell>,
+    left: Vec<&'a Cell>,
+    bottom: Vec<&'a Cell>,
+    right: Vec<&'a Cell>,
 }
 
 impl<'a> CellNeighbors<'a> {
@@ -391,10 +393,10 @@ mod test {
 
         let cell0 = Cell::new(SOLID, boxes[0].clone());
         let cell1 = Cell::new(SOLID, boxes[1].clone());
-        let cell2 = Cell::new(AIR, boxes[2].clone());
-        let cell3 = Cell::new(AIR, boxes[3].clone());
-        let cell4 = Cell::new(AIR, boxes[4].clone());
-        let cell5 = Cell::new(AIR, boxes[5].clone());
+        let cell2 = Cell::new(NO_SOLIDITY, boxes[2].clone());
+        let cell3 = Cell::new(NO_SOLIDITY, boxes[3].clone());
+        let cell4 = Cell::new(NO_SOLIDITY, boxes[4].clone());
+        let cell5 = Cell::new(NO_SOLIDITY, boxes[5].clone());
         let cell6 = Cell::new(SOLID, boxes[6].clone());
         let cell7 = Cell::new(SOLID, boxes[7].clone());
         let cell8 = Cell::new(SOLID, boxes[8].clone());

@@ -11,7 +11,7 @@ use crate::{
         HasSolidity,
     },
     rendering::View,
-    Camera, HasBox, HasBoxMut, ScarabResult,
+    Camera, HasBox, HasBoxMut, PhysicsResult, ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -44,7 +44,7 @@ impl<E: RegisteredEntity> Scene<E> {
         Ok(())
     }
 
-    pub fn register_entity(&mut self, to_register: E) -> ScarabResult<()> {
+    pub fn register_entity(&mut self, to_register: E) -> PhysicsResult<()> {
         self.entity_registry.register(to_register)
     }
 

@@ -1,3 +1,4 @@
+use shapes::Point;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -13,14 +14,28 @@ pub enum ScarabError {
     Unknown,
     #[error("{0}")]
     RawString(String),
-    #[error("PhysBox sizes must be greater than 0")]
-    PhysBoxSize,
-    #[error("Field positions must be positive")]
-    FieldPosition,
     #[error(transparent)]
     ControlError(#[from] ControlError),
     #[error("Attempted to register an entity with a pre-existing UUID: {0}")]
     EntityRegistration(Uuid),
     #[error(transparent)]
     IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    PhysicsError(#[from] PhysicsError),
+}
+
+pub type PhysicsResult<T> = Result<T, PhysicsError>;
+
+#[derive(Debug, Error, PartialEq)]
+pub enum PhysicsError {
+    #[error("PhysBox sizes must be greater than 0")]
+    PhysBoxSize,
+    #[error("Field positions must be positive")]
+    FieldPosition,
+    #[error("Maximum velocity must be positive")]
+    MaxVelocity,
+    #[error("Could not find field cell at position {0:?}")]
+    NoFieldCell(Point),
+    #[error("Error indexing into 'field' with index {0}")]
+    FieldIndex(usize),
 }

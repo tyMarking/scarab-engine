@@ -1,5 +1,4 @@
 use core::ops::{Add, Mul, Sub};
-use std::slice::Iter;
 
 use graphics::types::{Scalar, Vec2d};
 use serde::{Deserialize, Serialize};
@@ -35,7 +34,7 @@ impl BoxEdge {
         }
     }
 
-    pub fn direction(&self) -> [Scalar; 2] {
+    pub fn normal_vector(&self) -> [Scalar; 2] {
         match self {
             BoxEdge::Top => [0.0, -1.0],
             BoxEdge::Left => [-1.0, 0.0],
@@ -44,6 +43,7 @@ impl BoxEdge {
         }
     }
 
+    /// The axis that runs parallel to this edge's normal vector
     pub fn parallel_axis(&self) -> Axis {
         match self {
             BoxEdge::Top | BoxEdge::Bottom => Axis::Y,
@@ -51,6 +51,7 @@ impl BoxEdge {
         }
     }
 
+    /// The axis that runs perpendicular to this edge's normal vector
     pub fn perpendicular_axis(&self) -> Axis {
         match self {
             BoxEdge::Top | BoxEdge::Bottom => Axis::X,
@@ -58,7 +59,8 @@ impl BoxEdge {
         }
     }
 
-    pub fn iter() -> Iter<'static, BoxEdge> {
+    /// An iterator over each of the four edges
+    pub fn iter() -> core::slice::Iter<'static, BoxEdge> {
         static EDGES: [BoxEdge; 4] = [BoxEdge::Top, BoxEdge::Left, BoxEdge::Bottom, BoxEdge::Right];
         EDGES.iter()
     }
@@ -98,6 +100,8 @@ impl Velocity {
         f64::sqrt(self.x * self.x + self.y * self.y)
     }
 
+    /// Whether this velocity would be reduced by colliding with a game object on the given edge
+    /// i.e. is the dot product of the velocity and the edge's normal negative
     pub fn is_reduced_by_edge(&self, edge: BoxEdge) -> bool {
         match edge {
             BoxEdge::Top => self.y < 0.0,
@@ -105,6 +109,13 @@ impl Velocity {
             BoxEdge::Bottom => self.y > 0.0,
             BoxEdge::Right => self.x > 0.0,
         }
+    }
+
+    /// Gives the angle of the velocity vector in radians
+    /// with positive radians being from +x to +y. This would be clockwise on
+    /// the display because +y is down.
+    pub fn angle(&self) -> Scalar {
+        f64::atan2(self.y, self.x)
     }
 }
 

@@ -3,14 +3,7 @@ use std::sync::mpsc::TryRecvError;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{
-    gameobject::{entity::HasEntity, Entity},
-    rendering::View,
-    HasUuid, ScarabResult,
-};
-
-/// The maximum number of command reads per update
-const CHANNEL_READS: usize = 5;
+use crate::{gameobject::Entity, rendering::View, HasUuid, PhysicsResult};
 
 pub type ControlResult<T> = Result<T, ControlError>;
 
@@ -22,6 +15,8 @@ pub enum ControlError {
 
 // TODO: Eventually meant to be a trait that can be derived for enums whose
 // variants impl HasEntity
+/// A trait for types that can be a registered entity
+/// This is commonly an enum whose variants are tuples containing Entity and some Entity View
 pub trait RegisteredEntity: HasUuid {
     fn inner_entity(&self) -> &Entity;
 
@@ -30,6 +25,7 @@ pub trait RegisteredEntity: HasUuid {
     fn inner_view(&self) -> Box<dyn View<Viewed = Entity> + '_>;
 }
 
+/// The registry of all entities that are active in a scene
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EntityRegistry<E> {
     inner: Vec<E>,
@@ -41,8 +37,8 @@ impl<E> Default for EntityRegistry<E> {
     }
 }
 
-impl<E> EntityRegistry<E> {
-    pub fn register(&mut self, to_register: E) -> ScarabResult<()> {
+impl<E: RegisteredEntity> EntityRegistry<E> {
+    pub fn register(&mut self, to_register: E) -> PhysicsResult<()> {
         self.inner.push(to_register);
         Ok(())
     }
@@ -93,37 +89,4 @@ impl<'a, E> IntoIterator for &'a mut EntityRegistry<E> {
     fn into_iter(self) -> Self::IntoIter {
         self.inner.iter_mut()
     }
-}
-
-pub trait ControlsEntity<'a, 'b: 'a> {
-    type ControlledEntity: HasEntity<'a, 'b>;
-    type Actions: EntityActions<ControlledEntity = Self::ControlledEntity>;
-
-    /// Takes in a single variant of the Entity's Actions and update's the
-    /// entity's model accordingly
-    fn do_action(
-        &self,
-        entity: &mut Self::ControlledEntity,
-        action: Self::Actions,
-    ) -> ScarabResult<()>;
-
-    /// Returns the next action that should be applied for the entity
-    fn next_action(&mut self) -> Option<ControlResult<Self::Actions>>;
-
-    /// Consumes as many commands as possible up to `CHANNEL_READS`
-    fn exhaust_channel(&mut self, entity: &mut Self::ControlledEntity) -> ScarabResult<()> {
-        for _i in 0..CHANNEL_READS {
-            if let Some(action) = self.next_action() {
-                self.do_action(entity, action?)?;
-            } else {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-}
-
-pub trait EntityActions {
-    type ControlledEntity;
 }
