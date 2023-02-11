@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     gameobject::{
         entity::registry::{EntityRegistry, RegisteredEntity},
-        field::{Field, FieldView},
+        field::Field,
         HasSolidity,
     },
     rendering::View,
@@ -15,14 +15,14 @@ use crate::{
 };
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Scene<E> {
+pub struct Scene<E, V> {
     field: Field,
-    field_view: FieldView,
+    field_view: V,
     entity_registry: EntityRegistry<E>,
 }
 
-impl<E: RegisteredEntity> Scene<E> {
-    pub fn new(field: Field, field_view: FieldView) -> Self {
+impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
+    pub fn new(field: Field, field_view: V) -> Self {
         Self {
             field,
             field_view,

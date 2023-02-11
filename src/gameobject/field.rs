@@ -195,14 +195,14 @@ impl Field {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FieldView {
-    pub solid_view: CellView,
-    pub air_view: CellView,
-    pub default_view: CellView,
+pub struct FieldColorView {
+    pub solid_view: CellColorView,
+    pub air_view: CellColorView,
+    pub default_view: CellColorView,
 }
 
-impl FieldView {
-    fn view_for_cell(&self, cell: &Cell) -> &CellView {
+impl FieldColorView {
+    fn view_for_cell(&self, cell: &Cell) -> &CellColorView {
         match cell.solidity {
             SOLID => &self.solid_view,
             NO_SOLIDITY => &self.air_view,
@@ -211,7 +211,7 @@ impl FieldView {
     }
 }
 
-impl View for FieldView {
+impl View for FieldColorView {
     type Viewed = Field;
 
     fn render(
@@ -351,11 +351,11 @@ impl<'a> Iterator for CellNeighborsIterByEdge<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CellView {
+pub struct CellColorView {
     pub color: Color,
 }
 
-impl View for CellView {
+impl View for CellColorView {
     type Viewed = Cell;
 
     fn render(
