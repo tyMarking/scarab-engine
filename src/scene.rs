@@ -30,16 +30,16 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
         }
     }
 
-    pub fn render(&self, camera: &Camera, ctx: Context, gl: &mut GlGraphics) -> ScarabResult<()> {
-        self.field_view.render(&self.field, &camera, ctx, gl)?;
+    pub fn render(
+        &mut self,
+        camera: &Camera,
+        ctx: Context,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()> {
+        self.field_view.render(&mut self.field, &camera, ctx, gl)?;
 
-        for registered_entity in &self.entity_registry {
-            registered_entity.inner_view().render(
-                registered_entity.inner_entity(),
-                camera,
-                ctx,
-                gl,
-            )?;
+        for registered_entity in &mut self.entity_registry {
+            registered_entity.render(camera, ctx, gl)?;
         }
         Ok(())
     }

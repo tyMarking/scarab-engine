@@ -38,7 +38,7 @@ impl Camera {
     /// Gives the simple transform and redering rectangle for a 2D PhysBox
     pub fn box_renderables(
         &self,
-        physbox: PhysBox,
+        physbox: &PhysBox,
         ctx: Context,
     ) -> Option<([[f64; 3]; 2], [f64; 4])> {
         if physbox.has_overlap(&self.physbox) {

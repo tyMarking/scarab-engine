@@ -187,31 +187,13 @@ impl View for EntityView {
     type Viewed = Entity;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
-            graphics::rectangle(self.color, rect, transform, gl);
-        }
-
-        Ok(())
-    }
-}
-
-impl View for &EntityView {
-    type Viewed = Entity;
-
-    fn render(
-        &self,
-        viewed: &Self::Viewed,
-        camera: &Camera,
-        ctx: Context,
-        gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+        if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }
 

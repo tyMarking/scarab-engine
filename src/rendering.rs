@@ -7,7 +7,7 @@ pub trait View {
     type Viewed;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
         camera: &Camera,
         ctx: Context,

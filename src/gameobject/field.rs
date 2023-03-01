@@ -202,11 +202,11 @@ pub struct FieldColorView {
 }
 
 impl FieldColorView {
-    fn view_for_cell(&self, cell: &Cell) -> &CellColorView {
+    fn view_for_cell(&mut self, cell: &Cell) -> &mut CellColorView {
         match cell.solidity {
-            SOLID => &self.solid_view,
-            NO_SOLIDITY => &self.air_view,
-            _ => &self.default_view,
+            SOLID => &mut self.solid_view,
+            NO_SOLIDITY => &mut self.air_view,
+            _ => &mut self.default_view,
         }
     }
 }
@@ -215,7 +215,7 @@ impl View for FieldColorView {
     type Viewed = Field;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
         camera: &Camera,
         ctx: Context,
@@ -359,13 +359,13 @@ impl View for CellColorView {
     type Viewed = Cell;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+        if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }
 
