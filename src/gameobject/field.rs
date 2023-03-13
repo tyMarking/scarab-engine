@@ -2,6 +2,7 @@ use core::slice::Iter;
 use graphics::{types::Color, Context};
 use opengl_graphics::GlGraphics;
 use petgraph::{graph::NodeIndex, prelude::DiGraph, stable_graph::DefaultIx, visit::EdgeRef};
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 use std::fmt::Debug;
@@ -217,13 +218,14 @@ impl View for FieldColorView {
     fn render(
         &mut self,
         viewed: &Self::Viewed,
+        args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
         for cell in viewed.graph.node_weights() {
             let cell_view = self.view_for_cell(cell);
-            cell_view.render(cell, camera, ctx, gl)?;
+            cell_view.render(cell, args, camera, ctx, gl)?;
         }
         Ok(())
     }
@@ -361,6 +363,7 @@ impl View for CellColorView {
     fn render(
         &mut self,
         viewed: &Self::Viewed,
+        _args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,

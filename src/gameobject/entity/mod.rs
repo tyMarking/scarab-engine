@@ -10,6 +10,7 @@ use graphics::{
     Context,
 };
 use opengl_graphics::GlGraphics;
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -55,6 +56,10 @@ impl Entity {
         } else {
             velocity.normalize() * self.max_velocity
         }
+    }
+
+    pub fn get_velocity(&self) -> Velocity {
+        self.velocity
     }
 
     pub fn set_max_velocity(&mut self, max_velocity: Scalar) -> PhysicsResult<()> {
@@ -189,6 +194,7 @@ impl View for EntityView {
     fn render(
         &mut self,
         viewed: &Self::Viewed,
+        _args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,

@@ -2,10 +2,11 @@ use std::sync::mpsc::TryRecvError;
 
 use graphics::Context;
 use opengl_graphics::GlGraphics;
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::{gameobject::Entity, rendering::View, Camera, HasUuid, PhysicsResult, ScarabResult};
+use crate::{gameobject::Entity, Camera, HasUuid, PhysicsResult, ScarabResult};
 
 pub type ControlResult<T> = Result<T, ControlError>;
 
@@ -24,7 +25,13 @@ pub trait RegisteredEntity: HasUuid {
 
     fn inner_entity_mut(&mut self) -> &mut Entity;
 
-    fn render(&mut self, camera: &Camera, ctx: Context, gl: &mut GlGraphics) -> ScarabResult<()>;
+    fn render(
+        &mut self,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()>;
 }
 
 /// The registry of all entities that are active in a scene

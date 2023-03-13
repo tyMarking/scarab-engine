@@ -2,6 +2,7 @@ use std::fmt::Debug;
 
 use graphics::Context;
 use opengl_graphics::GlGraphics;
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -32,14 +33,16 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
 
     pub fn render(
         &mut self,
+        args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
-        self.field_view.render(&mut self.field, &camera, ctx, gl)?;
+        self.field_view
+            .render(&mut self.field, args, &camera, ctx, gl)?;
 
         for registered_entity in &mut self.entity_registry {
-            registered_entity.render(camera, ctx, gl)?;
+            registered_entity.render(args, camera, ctx, gl)?;
         }
         Ok(())
     }
