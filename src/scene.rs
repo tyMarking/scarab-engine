@@ -11,11 +11,12 @@ use crate::{
         field::Field,
         HasSolidity,
     },
-    rendering::View,
+    rendering::{registry::TextureRegistry, View},
     Camera, HasBox, HasBoxMut, PhysicsResult, ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
+/// A wrapper over all things in the app right now
 pub struct Scene<E, V> {
     field: Field,
     field_view: V,
@@ -23,6 +24,7 @@ pub struct Scene<E, V> {
 }
 
 impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
+    /// Initializes a new scene with the given field, field view and no entities
     pub fn new(field: Field, field_view: V) -> Self {
         Self {
             field,
@@ -31,30 +33,35 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
         }
     }
 
+    /// Renders everything in the scene
     pub fn render(
         &mut self,
         args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
+        texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
     ) -> ScarabResult<()> {
         self.field_view
-            .render(&mut self.field, args, &camera, ctx, gl)?;
+            .render(&mut self.field, args, &camera, ctx, texture_registry, gl)?;
 
         for registered_entity in &mut self.entity_registry {
-            registered_entity.render(args, camera, ctx, gl)?;
+            registered_entity.render(args, camera, ctx, texture_registry, gl)?;
         }
         Ok(())
     }
 
+    /// Registers a new entity to te scene
     pub fn register_entity(&mut self, to_register: E) -> PhysicsResult<()> {
         self.entity_registry.register(to_register)
     }
 
+    /// Gets a reference to the scene's [Field]
     pub fn get_field(&self) -> &Field {
         &self.field
     }
 
+    /// Runs the physics update for all of the scene's entities
     pub fn tick_entities(&mut self, dt: f64) -> ScarabResult<()> {
         for registered_entity in &mut self.entity_registry {
             registered_entity
@@ -92,6 +99,7 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
     }
 
     // TODO! Find a way to pin the return type of this to a specific type within the registry
+    /// Optionally returns a mutable reference to the scene's player
     pub fn player_mut(&mut self) -> Option<&mut E> {
         self.entity_registry.iter_mut().next()
     }

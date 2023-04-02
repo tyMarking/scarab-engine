@@ -8,14 +8,19 @@ pub trait App<'a, W: Window> {
     /// Responsible for things like saving app data
     fn close(self: Box<Self>, args: &CloseArgs);
 
+    /// Runs the render loop
     fn render(&mut self, args: &RenderArgs);
 
+    /// Runs the fixed time update loop
     fn update(&mut self, args: &UpdateArgs);
 
+    /// A mutable reference to the app's window
     fn window(&mut self) -> &mut W;
 
+    /// Controls input events
     fn input_event(&mut self, input: Input);
 
+    /// The [Events] to be used for running the app. Override to set custom event settings
     fn events(&self) -> Events {
         Events::new(EventSettings::new())
     }

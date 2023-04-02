@@ -1,14 +1,28 @@
+#![warn(missing_docs)]
+#![warn(clippy::missing_docs_in_private_items)]
 #![feature(get_mut_unchecked)]
 #![feature(min_specialization)]
 #![feature(trait_alias)]
 
+/// The Scarab Engine Library
+///
+/// more documentation coming soon
+
+/// The trait for running an app at a high level
 mod app;
+/// The camera controlling how rendering happens
 pub mod camera;
+/// Common error types
 pub mod error;
+/// Game objects
 pub mod gameobject;
+/// Player input
 pub mod input;
+/// Rendering everything
 pub mod rendering;
+/// The scene wrapping game objects
 pub mod scene;
+/// Generic types
 mod types;
 
 pub use app::App;

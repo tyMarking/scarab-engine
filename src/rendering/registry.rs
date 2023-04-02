@@ -1,0 +1,128 @@
+/// Rendering specific registries
+use std::{collections::HashMap, path::PathBuf};
+
+use derivative::Derivative;
+use opengl_graphics::{Texture, TextureSettings};
+use serde::{Deserialize, Serialize};
+
+use crate::{ScarabError, ScarabResult};
+
+#[derive(Derivative, Serialize)]
+#[derivative(Debug)]
+/// Wraps a texture along with its source path
+pub struct PathTexture {
+    #[derivative(Debug = "ignore")]
+    #[serde(skip_serializing)]
+    texture: Texture,
+    path: PathBuf,
+}
+
+impl PathTexture {
+    /// Pairs a texture and path to the texture
+    pub fn new(texture: Texture, path: PathBuf) -> Self {
+        Self { texture, path }
+    }
+
+    /// Returns a reference to the inner path
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
+    /// Returns a reference to the inner texture
+    pub fn texture(&self) -> &Texture {
+        &self.texture
+    }
+}
+
+#[derive(Derivative, Deserialize)]
+#[derivative(Debug)]
+#[serde(try_from = "TextureList")]
+/// Owns all loaded textures and can provide a default texture
+pub struct TextureRegistry {
+    default_path_texture: PathTexture,
+    #[derivative(Debug = "ignore")]
+    textures: HashMap<PathBuf, Texture>,
+}
+
+impl TextureRegistry {
+    /// Creates a new `TextureRegistry` given the default texture path and a list of other textures.
+    /// Pre-loads all texture paths given.
+    pub fn new(default_path: PathBuf, other_texture_paths: &[PathBuf]) -> ScarabResult<Self> {
+        let default_texture = Self::load_inner(&default_path, "couldn't load default texture")?;
+        let default_path_texture = PathTexture::new(default_texture, default_path);
+        let mut textures = HashMap::new();
+
+        for path in other_texture_paths {
+            let texture = Self::load_inner(&path, "couldn't load texture")?;
+            textures.insert(path.to_path_buf(), texture);
+        }
+
+        Ok(Self {
+            default_path_texture,
+            textures,
+        })
+    }
+
+    /// Gets a loaded texture a the given path or the default texture
+    pub fn get_or_default(&self, path: &PathBuf) -> &Texture {
+        self.textures
+            .get(path)
+            .unwrap_or_else(|| &self.default_path_texture.texture())
+    }
+
+    /// Gets a texture at the given path if it's already loaded
+    pub fn get(&self, path: &PathBuf) -> Option<&Texture> {
+        if path == self.default_path_texture.path() {
+            Some(self.default_path_texture.texture())
+        } else {
+            self.textures.get(path)
+        }
+    }
+
+    /// Loads the texture at the path
+    /// Note: uses default texture settings
+    /// TODO: optionally deserialize texture settings
+    /// Returns the previously loaded texture for the path if it exists
+    pub fn load(&mut self, path: PathBuf) -> ScarabResult<Option<Texture>> {
+        let texture = Self::load_inner(&path, "couldn't load texture")?;
+        Ok(self.textures.insert(path, texture))
+    }
+
+    fn load_inner(path: &PathBuf, err_string: &str) -> ScarabResult<Texture> {
+        let settings = TextureSettings::new();
+        Texture::from_path(path, &settings)
+            .or_else(|e| Err(ScarabError::RawString(format!("{}: {:?}", err_string, e))))
+    }
+}
+
+impl TryFrom<TextureList> for TextureRegistry {
+    type Error = ScarabError;
+    fn try_from(value: TextureList) -> ScarabResult<Self> {
+        Self::new(value.default_texture_path, &value.other_texture_paths)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A list of texture paths loaded in a `TextureRegistry`
+pub struct TextureList {
+    default_texture_path: PathBuf,
+    other_texture_paths: Vec<PathBuf>,
+}
+
+impl From<TextureRegistry> for TextureList {
+    fn from(value: TextureRegistry) -> Self {
+        Self {
+            default_texture_path: value.default_path_texture.path().clone(),
+            other_texture_paths: value.textures.keys().map(|k| k.clone()).collect(),
+        }
+    }
+}
+
+impl From<&TextureRegistry> for TextureList {
+    fn from(value: &TextureRegistry) -> Self {
+        Self {
+            default_texture_path: value.default_path_texture.path().clone(),
+            other_texture_paths: value.textures.keys().map(|k| k.clone()).collect(),
+        }
+    }
+}

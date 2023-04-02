@@ -1,13 +1,17 @@
+/// All moving/kinetic objects in a game scene
 pub mod entity;
+
+/// The setting of a game scene, determines static obstables
 pub mod field;
 
 use core::ops::{BitAnd, BitOr, Not};
 
 pub use entity::Entity;
 pub use field::{Cell, Field};
+use graphics::types::Scalar;
 use serde::{Deserialize, Serialize};
 
-use crate::BoxEdge;
+use crate::{BoxEdge, ScarabResult};
 
 /// Represents whether the typical entity can enter/exit a cell from each side
 ///
@@ -159,26 +163,36 @@ impl Not for Solidity {
 
 /// A trait for gameobjects that have a solidity component
 pub trait HasSolidity {
+    /// The game object's solidity component
     fn get_solidity(&self) -> &Solidity;
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
+/// The health of a game object
 pub struct Health {
-    curr: u32,
-    max: u32,
+    curr: Scalar,
+    max: Scalar,
 }
 
 impl Health {
-    pub fn new(max: u32) -> Self {
-        Self {
+    /// Creates a new health, with the current value initialized at max.
+    /// The max value must be positive (not including 0)
+    pub fn new(max: Scalar) -> ScarabResult<Self> {
+        if max < 0.0 {
+            return Err(crate::ScarabError::RawString(format!(
+                "Max health must be > 0: {:?}",
+                max
+            )));
+        };
+        Ok(Self {
             curr: max,
             max: max,
-        }
+        })
     }
 
     /// Apply a raw amount of damage. Returns Ok(()) if the new current is > 0,
     /// and Err(remaining: u32) otherwise
-    pub fn raw_damage(&mut self, amt: u32) -> Result<(), u32> {
+    pub fn raw_damage(&mut self, amt: Scalar) -> Result<(), Scalar> {
         if self.curr > amt {
             self.curr -= amt;
             Ok(())
@@ -186,11 +200,18 @@ impl Health {
             Err(amt - self.curr)
         }
     }
+
+    /// The current health value
+    pub fn current(&self) -> Scalar {
+        self.curr
+    }
 }
 
 /// A trait for gameobjects that have a health component
 pub trait HasHealth {
+    /// A reference to the game object's internal health
     fn get_health(&self) -> &Health;
 
+    /// A mutable reference to the game object's internal health
     fn get_health_mut(&mut self) -> &mut Health;
 }
