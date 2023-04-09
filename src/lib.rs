@@ -1,10 +1,9 @@
-#![warn(missing_docs)]
-#![warn(clippy::missing_docs_in_private_items)]
 #![feature(get_mut_unchecked)]
 #![feature(min_specialization)]
 #![feature(trait_alias)]
+#![warn(missing_docs)]
 
-/// The Scarab Engine Library
+//! The Scarab Engine Library
 ///
 /// more documentation coming soon
 
@@ -12,7 +11,7 @@
 mod app;
 /// The camera controlling how rendering happens
 pub mod camera;
-/// Common error types
+/// Common error and result types
 pub mod error;
 /// Game objects
 pub mod gameobject;
