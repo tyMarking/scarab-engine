@@ -8,7 +8,11 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
-use crate::{gameobject::Entity, Axis, Camera, HasBox, ScarabError, ScarabResult};
+use crate::{
+    error::{AnimationError, RenderError, RenderResult},
+    gameobject::Entity,
+    Axis, Camera, HasBox, ScarabResult,
+};
 
 use self::sprite_serde::ImageDef;
 
@@ -32,7 +36,7 @@ pub struct SpriteView {
 impl SpriteView {
     /// Creates a new SpriteView.
     /// Displays the Texture at the given path with the given size translated by the given pos
-    pub fn new(pos: Point, sprite_size: Size, texture_path: PathBuf) -> ScarabResult<Self> {
+    pub fn new(pos: Point, sprite_size: Size, texture_path: PathBuf) -> RenderResult<Self> {
         Ok(Self {
             pos,
             sprite_size,
@@ -58,7 +62,7 @@ impl SpriteView {
         ctx: graphics::Context,
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
             graphics::rectangle([0.0, 1.0, 1.0, 1.0], rect, transform, gl);
             self.image.draw(
@@ -105,16 +109,11 @@ impl SpriteAnimation {
         animation_direction: Axis,
         frames_in_sprite_map: Option<usize>,
         registry: &TextureRegistry,
-    ) -> ScarabResult<Self> {
+    ) -> RenderResult<Self> {
         let sprite = SpriteView::new(pos, sprite_size, texture_path)?;
 
         let map_size = registry.get(&sprite.texture_path).map_or_else(
-            || {
-                Err(ScarabError::RawString(format!(
-                    "could not load texture: {:?}",
-                    sprite.texture_path,
-                )))
-            },
+            || Err(RenderError::TextureNotLoaded(sprite.texture_path.clone())),
             |texture| Ok(texture.get_size()),
         )?;
         let max_num_frames = match animation_direction {
@@ -124,9 +123,7 @@ impl SpriteAnimation {
 
         let frames_in_sprite_map = if let Some(frames) = frames_in_sprite_map {
             if frames > max_num_frames {
-                return Err(ScarabError::RawString(
-                    "too many frames for sprite sheet".to_string(),
-                ));
+                return Err(AnimationError::TooManyFrames(frames, max_num_frames).into());
             } else {
                 frames
             }
@@ -170,7 +167,7 @@ impl SpriteAnimation {
         ctx: graphics::Context,
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         // args.ext_dt is a liar, so we calculate our own dt
         let now = Instant::now();
 
@@ -203,7 +200,7 @@ impl<S: AnimationStates> AnimationStateMachine<S> {
     pub fn new(initial_state: S, animations: HashMap<S, SpriteAnimation>) -> ScarabResult<Self> {
         let _ = animations
             .get(&initial_state)
-            .ok_or_else(|| ScarabError::RawString("missing initial state animation".to_string()));
+            .ok_or_else(|| AnimationError::NoAnimationForState(format!("{:?}", initial_state)));
 
         Ok(Self {
             current_state: initial_state,
@@ -218,15 +215,15 @@ impl<S: AnimationStates> AnimationStateMachine<S> {
 
     /// Sets the current state to new_state.
     /// Fails if there is no animation for new_state
-    pub fn set_current_state(&mut self, new_state: S) -> ScarabResult<()> {
+    pub fn set_current_state(&mut self, new_state: S) -> Result<(), AnimationError> {
         if self.animations.contains_key(&new_state) {
             let new_animation = self.animations.get_mut(&new_state).unwrap();
             new_animation.reset();
             self.current_state = new_state;
             Ok(())
         } else {
-            Err(ScarabError::RawString(format!(
-                "no animation for state: {:?}",
+            Err(AnimationError::NoAnimationForState(format!(
+                "{:?}",
                 new_state
             )))
         }
@@ -283,12 +280,12 @@ impl<S: AnimationStates> View for AnimationStateMachine<S> {
         ctx: graphics::Context,
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         self.current_state
             .next_state(viewed)
             .map_or(Ok(()), |s| self.set_current_state(s))
             .unwrap_or_else(|e| {
-                println!("Error setting animation state for {:?}: {:?}", self, e);
+                println!("Error rendering animated sprite for {:?}: {:}", self, e);
             });
 
         let animation = self.animations.get_mut(&self.current_state).unwrap();

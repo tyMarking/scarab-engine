@@ -1,4 +1,5 @@
 use crate::{
+    error::RenderResult,
     gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
     rendering::{registry::TextureRegistry, View},
     Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
@@ -45,7 +46,7 @@ impl Entity {
             velocity: [0.0, 0.0].into(),
             max_velocity: 1.0,
             physbox: PhysBox::new([0.0, 0.0, 1.0, 1.0].into())?,
-            health: Health::new(10.0)?,
+            health: Health::new(10.0),
             solidity: SOLID,
             uuid: Uuid::new_v4(),
         })
@@ -211,7 +212,7 @@ impl View for EntityView {
         ctx: Context,
         _texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }

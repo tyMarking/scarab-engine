@@ -8,9 +8,10 @@ use shapes::Point;
 use std::fmt::Debug;
 
 use crate::{
+    error::RenderResult,
     gameobject::Solidity,
     rendering::{registry::TextureRegistry, View},
-    BoxEdge, Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult,
+    BoxEdge, Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult,
 };
 
 use super::{HasSolidity, NO_SOLIDITY, SOLID};
@@ -228,7 +229,7 @@ impl View for FieldColorView {
         ctx: Context,
         texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         for cell in viewed.graph.node_weights() {
             let cell_view = self.view_for_cell(cell);
             cell_view.render(cell, args, camera, ctx, texture_registry, gl)?;
@@ -377,7 +378,7 @@ impl View for CellColorView {
         ctx: Context,
         _texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }

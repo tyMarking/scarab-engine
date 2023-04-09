@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use shapes::Point;
 use thiserror::Error;
 use uuid::Uuid;
@@ -26,6 +28,9 @@ pub enum ScarabError {
     #[error(transparent)]
     /// Errors related to the physics engine
     PhysicsError(#[from] PhysicsError),
+    #[error(transparent)]
+    /// Error related to rendering/graphics,
+    RenderingError(#[from] RenderError),
 }
 
 /// A generic result type for physics operations
@@ -49,4 +54,35 @@ pub enum PhysicsError {
     #[error("Error indexing into 'field' with index {0}")]
     /// Occurs when there is no cell on the field with the given index
     FieldIndex(usize),
+}
+
+/// A generic result type for rendering operations
+pub type RenderResult<T> = Result<T, RenderError>;
+
+#[derive(Debug, Error, PartialEq)]
+/// A generic error type for rendering operations
+pub enum RenderError {
+    /// Occurs when attempting to get a texture from the registry that doesn't exist
+    #[error("The texture '{0}' is not loaded")]
+    TextureNotLoaded(PathBuf),
+    /// An error specific to a spite animation
+    #[error(transparent)]
+    AnimationError(#[from] AnimationError),
+    /// Occurs when there is an error loading a texture to the registry
+    /// i.e. missing file
+    /// 'String' is the specific error message
+    #[error("Could not load texture {0}: {1}")]
+    CouldNotLoadTexture(PathBuf, String),
+}
+
+#[derive(Debug, Error, PartialEq)]
+/// An error specific to sprite animations
+pub enum AnimationError {
+    /// Occurs when creating a sprite animation and the number of frames requested
+    /// would overflow the width/height of the spritesheet.
+    #[error("Requested number of frames ({0}) is too many for sprite sheet ({1})")]
+    TooManyFrames(usize, usize),
+    /// An ASM doesn't have an animation for the animation state
+    #[error("No animation loaded for state {0}")]
+    NoAnimationForState(String),
 }

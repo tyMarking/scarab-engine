@@ -11,7 +11,7 @@ pub use field::{Cell, Field};
 use graphics::types::Scalar;
 use serde::{Deserialize, Serialize};
 
-use crate::{BoxEdge, ScarabResult};
+use crate::BoxEdge;
 
 /// Represents whether the typical entity can enter/exit a cell from each side
 ///
@@ -176,29 +176,16 @@ pub struct Health {
 
 impl Health {
     /// Creates a new health, with the current value initialized at max.
-    /// The max value must be positive (not including 0)
-    pub fn new(max: Scalar) -> ScarabResult<Self> {
-        if max < 0.0 {
-            return Err(crate::ScarabError::RawString(format!(
-                "Max health must be > 0: {:?}",
-                max
-            )));
-        };
-        Ok(Self {
+    pub fn new(max: Scalar) -> Self {
+        Self {
             curr: max,
             max: max,
-        })
+        }
     }
 
-    /// Apply a raw amount of damage. Returns Ok(()) if the new current is > 0,
-    /// and Err(remaining: u32) otherwise
-    pub fn raw_damage(&mut self, amt: Scalar) -> Result<(), Scalar> {
-        if self.curr > amt {
-            self.curr -= amt;
-            Ok(())
-        } else {
-            Err(amt - self.curr)
-        }
+    /// Apply a raw amount of damage.
+    pub fn raw_damage(&mut self, amt: Scalar) {
+        self.curr -= amt;
     }
 
     /// The current health value

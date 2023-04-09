@@ -3,7 +3,7 @@ use graphics::Context;
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 
-use crate::{Camera, ScarabResult};
+use crate::{error::RenderResult, Camera};
 
 use self::registry::TextureRegistry;
 
@@ -26,5 +26,5 @@ pub trait View {
         ctx: Context,
         texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()>;
+    ) -> RenderResult<()>;
 }

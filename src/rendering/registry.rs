@@ -5,7 +5,10 @@ use derivative::Derivative;
 use opengl_graphics::{Texture, TextureSettings};
 use serde::{Deserialize, Serialize};
 
-use crate::{ScarabError, ScarabResult};
+use crate::{
+    error::{RenderError, RenderResult},
+    ScarabError, ScarabResult,
+};
 
 #[derive(Derivative, Serialize)]
 #[derivative(Debug)]
@@ -48,12 +51,12 @@ impl TextureRegistry {
     /// Creates a new `TextureRegistry` given the default texture path and a list of other textures.
     /// Pre-loads all texture paths given.
     pub fn new(default_path: PathBuf, other_texture_paths: &[PathBuf]) -> ScarabResult<Self> {
-        let default_texture = Self::load_inner(&default_path, "couldn't load default texture")?;
+        let default_texture = Self::load_inner(&default_path)?;
         let default_path_texture = PathTexture::new(default_texture, default_path);
         let mut textures = HashMap::new();
 
         for path in other_texture_paths {
-            let texture = Self::load_inner(&path, "couldn't load texture")?;
+            let texture = Self::load_inner(&path)?;
             textures.insert(path.to_path_buf(), texture);
         }
 
@@ -83,15 +86,15 @@ impl TextureRegistry {
     /// Note: uses default texture settings
     /// TODO: optionally deserialize texture settings
     /// Returns the previously loaded texture for the path if it exists
-    pub fn load(&mut self, path: PathBuf) -> ScarabResult<Option<Texture>> {
-        let texture = Self::load_inner(&path, "couldn't load texture")?;
+    pub fn load(&mut self, path: PathBuf) -> RenderResult<Option<Texture>> {
+        let texture = Self::load_inner(&path)?;
         Ok(self.textures.insert(path, texture))
     }
 
-    fn load_inner(path: &PathBuf, err_string: &str) -> ScarabResult<Texture> {
+    fn load_inner(path: &PathBuf) -> RenderResult<Texture> {
         let settings = TextureSettings::new();
         Texture::from_path(path, &settings)
-            .or_else(|e| Err(ScarabError::RawString(format!("{}: {:?}", err_string, e))))
+            .or_else(|e| Err(RenderError::CouldNotLoadTexture(path.clone(), e)))
     }
 }
 

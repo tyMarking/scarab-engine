@@ -4,8 +4,8 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    gameobject::Entity, rendering::registry::TextureRegistry, Camera, HasUuid, PhysicsResult,
-    ScarabResult,
+    error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry, Camera, HasUuid,
+    PhysicsResult, ScarabResult,
 };
 
 // TODO: Eventually meant to be a trait that can be derived for enums whose
@@ -28,7 +28,7 @@ pub trait RegisteredEntity: HasUuid {
         ctx: Context,
         texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()>;
+    ) -> RenderResult<()>;
 }
 
 /// The registry of all entities that are active in a scene
