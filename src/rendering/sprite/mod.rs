@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use std::{collections::HashMap, hash::Hash, path::PathBuf, time::Instant};
 
 use derivative::Derivative;
-use graphics::{Image, ImageSize};
+use graphics::{color::TRANSPARENT, Image, ImageSize, Transformed};
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
@@ -41,7 +41,8 @@ impl SpriteView {
             pos,
             sprite_size,
             image: Image::new()
-                .rect([-pos.x, -pos.y, sprite_size.w, sprite_size.h])
+                .rect([0.0, 0.0, sprite_size.w, sprite_size.h])
+                // .rect([-pos.x, -pos.y, sprite_size.w, sprite_size.h])
                 .src_rect([0.0, 0.0, sprite_size.w, sprite_size.h]),
             texture_path,
         })
@@ -64,7 +65,13 @@ impl SpriteView {
         gl: &mut opengl_graphics::GlGraphics,
     ) -> RenderResult<()> {
         if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
+            // solid color box for help debugging collision
             graphics::rectangle([0.0, 1.0, 1.0, 1.0], rect, transform, gl);
+            let scale_factor = camera.points_per_pixel();
+            let transform = transform
+                .trans_pos(self.pos * -scale_factor)
+                .scale(scale_factor, scale_factor);
+
             self.image.draw(
                 texture_registry.get_or_default(&self.texture_path),
                 &ctx.draw_state,

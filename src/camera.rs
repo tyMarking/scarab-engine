@@ -85,7 +85,6 @@ impl Camera {
         let top_left = pos - *self.physbox.pos();
         let top_left_scaled = top_left * self.points_per_pixel.into()
             + [self.vertical_bar_width, self.horizontal_bar_height];
-        // let t_pos = (pos - self.physbox.pos().convert_n()) * self.pixels_per_tile.into();
 
         ctx.transform.trans(top_left_scaled.x, top_left_scaled.y)
     }
