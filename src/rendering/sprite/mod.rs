@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use std::{collections::HashMap, hash::Hash, path::PathBuf, time::Instant};
 
 use derivative::Derivative;
-use graphics::{color::TRANSPARENT, Image, ImageSize, Transformed};
+use graphics::{Image, ImageSize, Transformed};
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
@@ -42,7 +42,6 @@ impl SpriteView {
             sprite_size,
             image: Image::new()
                 .rect([0.0, 0.0, sprite_size.w, sprite_size.h])
-                // .rect([-pos.x, -pos.y, sprite_size.w, sprite_size.h])
                 .src_rect([0.0, 0.0, sprite_size.w, sprite_size.h]),
             texture_path,
         })

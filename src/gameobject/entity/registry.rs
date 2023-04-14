@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry, Camera, HasUuid,
-    PhysicsResult, ScarabResult,
+    PhysicsResult,
 };
 
 // TODO: Eventually meant to be a trait that can be derived for enums whose

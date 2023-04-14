@@ -3,7 +3,7 @@ use graphics::{
     Context, Transformed,
 };
 use opengl_graphics::GlGraphics;
-use piston::RenderArgs;
+use piston::{RenderArgs, Size};
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
@@ -12,8 +12,7 @@ use crate::PhysBox;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// Controls how the pixel art is rendered and maintained through play
 ///
-/// A point is usually what is thought of as a pixel on the monitor, but this is
-/// not always true. See [Size] for more information.
+/// A point is usually what is thought of as a pixel on the monitor
 ///
 /// A pixel is one single square in the pixel art graphics, and is also the unit size for physics operations
 pub struct Camera {
@@ -31,39 +30,28 @@ pub struct Camera {
 
 impl Camera {
     /// Makes a new camera
-    pub fn new<S>(physbox: PhysBox, window_size: S) -> Self
-    where
-        S: From<[f64; 2]>,
-        [f64; 2]: From<S>,
-    {
+    pub fn new(physbox: PhysBox, window_size: [f64; 2]) -> Self {
         let mut s = Self {
             points_per_pixel: 1.0,
             physbox,
-            window_size: window_size.into(),
+            window_size: window_size.clone(),
             vertical_bar_width: 0.0,
             horizontal_bar_height: 0.0,
         };
 
-        s.set_window_size::<[f64; 2]>(s.window_size);
+        s.set_window_size(&window_size);
         s
     }
 
     /// Handles when the window size is changed for updating the points per pixel
     /// May return a preferred new window size if the camera prefers it
-    pub fn set_window_size<S>(&mut self, new_window_size: S) -> Option<S>
-    where
-        S: From<[f64; 2]>,
-        [f64; 2]: From<S>,
-    {
-        let mut override_new_window = false;
-        let [mut w_w, mut h_w]: [f64; 2] = new_window_size.into();
+    pub fn set_window_size(&mut self, window_size: &[f64; 2]) {
+        let [mut w_w, mut h_w] = window_size;
         if w_w < self.physbox.size().w {
-            override_new_window = true;
             w_w = self.physbox.size().w;
         }
 
         if h_w < self.physbox.size().h {
-            override_new_window = true;
             h_w = self.physbox.size().h;
         }
 
@@ -72,12 +60,6 @@ impl Camera {
 
         self.vertical_bar_width = (w_w - self.physbox.size().w * self.points_per_pixel) / 2.0;
         self.horizontal_bar_height = (h_w - self.physbox.size().h * self.points_per_pixel) / 2.0;
-
-        if override_new_window {
-            Some([w_w, h_w].into())
-        } else {
-            None
-        }
     }
 
     /// Creates a trasnform matrix for the given point from world coordinates to screen coordinates

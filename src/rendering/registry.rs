@@ -2,7 +2,7 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use derivative::Derivative;
-use opengl_graphics::{Texture, TextureSettings};
+use opengl_graphics::{Filter, Texture, TextureSettings};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -50,6 +50,7 @@ pub struct TextureRegistry {
 impl TextureRegistry {
     /// Creates a new `TextureRegistry` given the default texture path and a list of other textures.
     /// Pre-loads all texture paths given.
+    /// Textures default with "Nearest" filtering
     pub fn new(default_path: PathBuf, other_texture_paths: &[PathBuf]) -> ScarabResult<Self> {
         let default_texture = Self::load_inner(&default_path)?;
         let default_path_texture = PathTexture::new(default_texture, default_path);
@@ -92,7 +93,7 @@ impl TextureRegistry {
     }
 
     fn load_inner(path: &PathBuf) -> RenderResult<Texture> {
-        let settings = TextureSettings::new();
+        let settings = TextureSettings::new().filter(Filter::Nearest);
         Texture::from_path(path, &settings)
             .or_else(|e| Err(RenderError::CouldNotLoadTexture(path.clone(), e)))
     }
