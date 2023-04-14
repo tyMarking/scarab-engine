@@ -1,5 +1,4 @@
 #![feature(get_mut_unchecked)]
-#![feature(min_specialization)]
 #![feature(trait_alias)]
 #![warn(missing_docs)]
 
@@ -27,5 +26,7 @@ mod types;
 pub use app::App;
 pub use camera::Camera;
 pub use error::{PhysicsError, PhysicsResult, ScarabError, ScarabResult};
+pub use glutin_window::GlutinWindow;
 pub use scene::Scene;
 pub use types::*;
+pub use winit::dpi::LogicalSize;
