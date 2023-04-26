@@ -1,5 +1,3 @@
-#![feature(get_mut_unchecked)]
-#![feature(trait_alias)]
 #![warn(missing_docs)]
 
 //! The Scarab Engine Library

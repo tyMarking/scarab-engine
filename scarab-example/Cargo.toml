@@ -1,0 +1,23 @@
+[package]
+name = "scarab-example"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+scarab_engine = { path = "../scarab-engine" }
+piston = "0.53.0"
+piston2d-graphics = "0.42.0"
+pistoncore-glutin_window = "0.70.1"
+piston2d-opengl_graphics = "0.81.0"
+piston2d-shapes = { git = "ssh://git@github.com/rhaaaaawb/shapes.git", branch = "rhawb" }
+serde = { version = "1.0", features = ["derive"] }
+rmp-serde = "1.1"
+thiserror = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+vecmath = "1.0.0"
+
+[[bin]]
+name = "scarab_example"
+path = "src/main.rs"
