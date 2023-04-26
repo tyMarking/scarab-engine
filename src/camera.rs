@@ -3,7 +3,7 @@ use graphics::{
     Context, Transformed,
 };
 use opengl_graphics::GlGraphics;
-use piston::{RenderArgs, Size};
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
