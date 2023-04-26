@@ -84,20 +84,21 @@ fn main() -> ScarabResult<()> {
     b.set_size([20.0, 20.0].into())?;
     p.set_max_velocity(75.0)?;
 
-    // TODO! (high) these paths are relative to the process's directory, which is highly inconvenient
     let texture_registry = TextureRegistry::new(
-        "scarab-example/assets/texture-default.png".into(),
+        // This ends up being the path from cwd to the assets. It has to change depending on deployment
+        "scarab-example/assets".into(),
+        "texture-default.png".into(),
         &[
-            "scarab-example/assets/RH-idle-front.png".into(),
-            "scarab-example/assets/RH-run-front.png".into(),
-            "scarab-example/assets/RH-run-front-color-dodged.png".into(),
+            "RH-idle-front.png".into(),
+            "RH-run-front.png".into(),
+            "RH-run-front-color-dodged.png".into(),
         ],
     )?;
 
     let player_idle = SpriteAnimation::new(
         [54.0, 67.0].into(),
         [128.0, 128.0].into(),
-        "scarab-example/assets/RH-idle-front.png".into(),
+        "RH-idle-front.png".into(),
         MS_PER_FRAME,
         Axis::X,
         None,
@@ -107,7 +108,7 @@ fn main() -> ScarabResult<()> {
     let player_run = SpriteAnimation::new(
         [54.0, 67.0].into(),
         [128.0, 128.0].into(),
-        "scarab-example/assets/RH-run-front.png".into(),
+        "RH-run-front.png".into(),
         MS_PER_FRAME,
         Axis::X,
         None,
@@ -127,12 +128,10 @@ fn main() -> ScarabResult<()> {
     b.set_size([15.0, 15.0].into())?;
     r.set_max_velocity(50.0)?;
 
-    // Magenta
     let enemy_view = AnimationStateMachine::static_animation(SpriteAnimation::new(
         [56.0, 70.0].into(),
         [128.0, 128.0].into(),
-        // Hey, I'm not an artist, but I wanted an actual animation to test this with...
-        "scarab-example/assets/RH-run-front-color-dodged.png".into(),
+        "RH-run-front-color-dodged.png".into(),
         MS_PER_FRAME,
         Axis::X,
         None,

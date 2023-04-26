@@ -42,6 +42,7 @@ impl PathTexture {
 #[serde(try_from = "TextureList")]
 /// Owns all loaded textures and can provide a default texture
 pub struct TextureRegistry {
+    assets_path: PathBuf,
     default_path_texture: PathTexture,
     #[derivative(Debug = "ignore")]
     textures: HashMap<PathBuf, Texture>,
@@ -51,17 +52,25 @@ impl TextureRegistry {
     /// Creates a new `TextureRegistry` given the default texture path and a list of other textures.
     /// Pre-loads all texture paths given.
     /// Textures default with "Nearest" filtering
-    pub fn new(default_path: PathBuf, other_texture_paths: &[PathBuf]) -> ScarabResult<Self> {
-        let default_texture = Self::load_inner(&default_path)?;
+    /// The assets_path should be a path to the binary's assets folder
+    /// This can be an absolute or relative path.
+    /// If a relative path is given, it's assumed to be the path from the binary executable to the assets folder.
+    pub fn new(
+        assets_path: PathBuf,
+        default_path: PathBuf,
+        other_texture_paths: &[PathBuf],
+    ) -> ScarabResult<Self> {
+        let default_texture = Self::load_inner(&assets_path.join(&default_path))?;
         let default_path_texture = PathTexture::new(default_texture, default_path);
         let mut textures = HashMap::new();
 
         for path in other_texture_paths {
-            let texture = Self::load_inner(&path)?;
+            let texture = Self::load_inner(&assets_path.join(&path))?;
             textures.insert(path.to_path_buf(), texture);
         }
 
         Ok(Self {
+            assets_path,
             default_path_texture,
             textures,
         })
@@ -88,7 +97,7 @@ impl TextureRegistry {
     /// TODO: optionally deserialize texture settings
     /// Returns the previously loaded texture for the path if it exists
     pub fn load(&mut self, path: PathBuf) -> RenderResult<Option<Texture>> {
-        let texture = Self::load_inner(&path)?;
+        let texture = Self::load_inner(&self.assets_path.join(&path))?;
         Ok(self.textures.insert(path, texture))
     }
 
@@ -102,13 +111,18 @@ impl TextureRegistry {
 impl TryFrom<TextureList> for TextureRegistry {
     type Error = ScarabError;
     fn try_from(value: TextureList) -> ScarabResult<Self> {
-        Self::new(value.default_texture_path, &value.other_texture_paths)
+        Self::new(
+            value.assets_path,
+            value.default_texture_path,
+            &value.other_texture_paths,
+        )
     }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A list of texture paths loaded in a `TextureRegistry`
 pub struct TextureList {
+    assets_path: PathBuf,
     default_texture_path: PathBuf,
     other_texture_paths: Vec<PathBuf>,
 }
@@ -116,6 +130,7 @@ pub struct TextureList {
 impl From<TextureRegistry> for TextureList {
     fn from(value: TextureRegistry) -> Self {
         Self {
+            assets_path: value.assets_path,
             default_texture_path: value.default_path_texture.path().clone(),
             other_texture_paths: value.textures.keys().map(|k| k.clone()).collect(),
         }
@@ -125,6 +140,7 @@ impl From<TextureRegistry> for TextureList {
 impl From<&TextureRegistry> for TextureList {
     fn from(value: &TextureRegistry) -> Self {
         Self {
+            assets_path: value.assets_path.clone(),
             default_texture_path: value.default_path_texture.path().clone(),
             other_texture_paths: value.textures.keys().map(|k| k.clone()).collect(),
         }
