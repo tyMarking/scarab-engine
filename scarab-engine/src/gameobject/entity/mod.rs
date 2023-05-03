@@ -20,12 +20,12 @@ use super::Field;
 pub mod registry;
 
 /// A trait for game objects that wrap/own an entity
-pub trait HasEntity<'a, 'b: 'a> {
+pub trait HasEntity<'e, 's: 'e> {
     /// Returns a reference to the game object's inner entity
-    fn get_entity(&'b self) -> &'a Entity;
+    fn get_entity(&'s self) -> &'e Entity;
 
     /// Returns a mutable reference to the game object's inner entity
-    fn get_entity_mut(&'b mut self) -> &'a mut Entity;
+    fn get_entity_mut(&'s mut self) -> &'e mut Entity;
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -25,6 +25,17 @@ pub trait InputRegistry {
     fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions>;
 }
 
+/// Represents a type of input binding and how it is transformed into an action argument
+pub trait InputBinding {
+    /// The type of value that this input can produce (i.e. [bool])
+    type ActionArg;
+
+    /// If the given input matches this binding, returns the result corresponding to the input
+    fn maybe_to_action(&mut self, input: &Input) -> Option<Self::ActionArg>;
+}
+
+// TODO! a piston button can already be a "ControllerHat" which is a D-pad already,
+// have to figure out how to reconcile that
 #[derive(Debug, Clone, Serialize, Deserialize)]
 /// A binding between 4 keyboard buttons and a representation of a 2-axis D-pad
 pub struct Axis2dBinding {
@@ -76,15 +87,20 @@ impl Axis2dBinding {
             None
         }
     }
+}
 
-    /// If the given [ButtonArgs] match one of the set buttons it returns a 2-d vector representing the axis that the button press would represent
-    pub fn maybe_to_action(&mut self, args: ButtonArgs) -> Option<[f64; 2]> {
-        if let Some(dir) = self.maybe_direction_from_button(&args) {
-            self.set_axis_button(args.state, dir);
-            Some(self.into())
-        } else {
-            None
-        }
+impl InputBinding for Axis2dBinding {
+    type ActionArg = [f64; 2];
+
+    fn maybe_to_action(&mut self, input: &Input) -> Option<Self::ActionArg> {
+        if let Input::Button(args) = input {
+            if let Some(dir) = self.maybe_direction_from_button(&args) {
+                self.set_axis_button(args.state, dir);
+                return Some(self.into());
+            }
+        };
+
+        None
     }
 }
 
@@ -117,4 +133,32 @@ pub enum Axis2dDirection {
     PosY,
     /// Negative-Y direction (up)
     NegY,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+/// An input binding that is true iff the corresponding button is `high_state`
+pub struct ButtonBinding {
+    high_state: ButtonState,
+    button: Button,
+}
+
+impl ButtonBinding {
+    /// Makes a new instance of self for the given button and state which it should be true
+    pub fn new(high_state: ButtonState, button: Button) -> Self {
+        Self { high_state, button }
+    }
+}
+
+impl InputBinding for ButtonBinding {
+    type ActionArg = bool;
+
+    fn maybe_to_action(&mut self, input: &Input) -> Option<Self::ActionArg> {
+        if let Input::Button(args) = input {
+            if args.button == self.button {
+                return Some(args.state == self.high_state);
+            }
+        };
+
+        None
+    }
 }

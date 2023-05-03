@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use opengl_graphics::{GlGraphics, OpenGL};
-use piston::{Button, EventSettings, Key, Window, WindowSettings};
+use piston::{Button, ButtonState, EventSettings, Key, Window, WindowSettings};
 
 use scarab_engine::{
     gameobject::{
         field::{Cell, CellColorView, Field, FieldColorView},
         Entity, NO_SOLIDITY, SOLID,
     },
-    input::Axis2dBinding,
+    input::{Axis2dBinding, ButtonBinding},
     rendering::{
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
@@ -146,9 +146,6 @@ fn main() -> ScarabResult<()> {
 
     let enemy2 = Enemy { entity: r };
 
-    // Currently the order for entity registration is very important.
-    // The implementation of 'Scene' assumes that the first registered entity is
-    // the player
     scene.register_entity(ExampleEntities::Player((player, player_view)))?;
     scene.register_entity(ExampleEntities::Enemy((enemy, enemy_view.clone())))?;
     scene.register_entity(ExampleEntities::Enemy((enemy2, enemy_view)))?;
@@ -160,6 +157,10 @@ fn main() -> ScarabResult<()> {
         Button::Keyboard(Key::S),
         Button::Keyboard(Key::A),
         Button::Keyboard(Key::W),
+    ));
+    input_registry.bind_attack(ButtonBinding::new(
+        ButtonState::Press,
+        Button::Mouse(piston::MouseButton::Left),
     ));
 
     // NOTE: All of the above code is reponsible for initializing the game state

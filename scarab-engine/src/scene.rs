@@ -12,7 +12,7 @@ use crate::{
         HasSolidity,
     },
     rendering::{registry::TextureRegistry, View},
-    Camera, HasBox, HasBoxMut, PhysicsResult, ScarabResult,
+    Camera, HasBox, HasBoxMut, ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -23,7 +23,11 @@ pub struct Scene<E, V> {
     entity_registry: EntityRegistry<E>,
 }
 
-impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
+impl<E, V> Scene<E, V>
+where
+    E: RegisteredEntity + 'static,
+    V: View<Viewed = Field>,
+{
     /// Initializes a new scene with the given field, field view and no entities
     pub fn new(field: Field, field_view: V) -> Self {
         Self {
@@ -51,8 +55,8 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
         Ok(())
     }
 
-    /// Registers a new entity to te scene
-    pub fn register_entity(&mut self, to_register: E) -> PhysicsResult<()> {
+    /// Registers a new entity to the scene
+    pub fn register_entity(&mut self, to_register: E) -> ScarabResult<()> {
         self.entity_registry.register(to_register)
     }
 
@@ -100,7 +104,7 @@ impl<E: RegisteredEntity, V: View<Viewed = Field>> Scene<E, V> {
 
     // TODO! Find a way to pin the return type of this to a specific type within the registry
     /// Optionally returns a mutable reference to the scene's player
-    pub fn player_mut(&mut self) -> Option<&mut E> {
-        self.entity_registry.iter_mut().next()
+    pub fn player_mut<'e, 's: 'e>(&mut self) -> Option<&mut E::Player<'e, 's>> {
+        self.entity_registry.player_mut()
     }
 }

@@ -24,6 +24,8 @@ pub enum ExampleEntities {
 }
 
 impl RegisteredEntity for ExampleEntities {
+    type Player<'e, 's: 'e> = Player;
+
     fn inner_entity(&self) -> &Entity {
         match self {
             Self::Player((player, _view)) => &player.entity,
@@ -53,6 +55,24 @@ impl RegisteredEntity for ExampleEntities {
             Self::Enemy((enemy, view)) => {
                 view.render(&enemy.entity, args, camera, ctx, texture_registry, gl)
             }
+        }
+    }
+
+    fn maybe_player<'e, 's: 'e>(
+        &self,
+    ) -> Option<&<ExampleEntities as RegisteredEntity>::Player<'e, 's>> {
+        match self {
+            Self::Player((p, _)) => Some(p),
+            _ => None,
+        }
+    }
+
+    fn maybe_player_mut<'e, 's: 'e>(
+        &mut self,
+    ) -> Option<&mut <ExampleEntities as RegisteredEntity>::Player<'e, 's>> {
+        match self {
+            Self::Player((p, _)) => Some(p),
+            _ => None,
         }
     }
 }

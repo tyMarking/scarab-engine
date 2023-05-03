@@ -2,30 +2,30 @@ use core::marker::PhantomData;
 
 use piston::Input;
 use scarab_engine::{
-    gameobject::entity::registry::RegisteredEntity,
-    input::{Axis2dBinding, InputRegistry},
+    input::{Axis2dBinding, ButtonBinding, InputBinding, InputRegistry},
     ScarabResult, Velocity,
 };
 use serde::{Deserialize, Serialize};
 
-use crate::entities::ExampleEntities;
+use crate::entities::Player;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum InputActions {
     SetPlayerMovement(Velocity),
+    Attack,
     Nop,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Inputs<'a> {
     move_binding: Option<Axis2dBinding>,
-    phantom: PhantomData<&'a u32>,
+    attack_binding: Option<ButtonBinding>,
+    phantom: PhantomData<&'a u8>,
 }
 
 impl<'a> InputRegistry for Inputs<'a> {
     type InputActions = InputActions;
-    // TODO! this should ideally only target player
-    type InputTarget = ExampleEntities;
+    type InputTarget = Player;
 
     fn do_input_action(
         &self,
@@ -34,8 +34,12 @@ impl<'a> InputRegistry for Inputs<'a> {
     ) -> ScarabResult<()> {
         match action {
             InputActions::SetPlayerMovement(vel) => {
-                let entity = target.inner_entity_mut();
-                entity.set_velocity(vel * entity.get_max_velocity());
+                target
+                    .entity
+                    .set_velocity(vel * target.entity.get_max_velocity());
+            }
+            InputActions::Attack => {
+                target.attack();
             }
             InputActions::Nop => {}
         }
@@ -44,15 +48,24 @@ impl<'a> InputRegistry for Inputs<'a> {
     }
 
     fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions> {
-        match input {
-            Input::Button(args) => self
-                .move_binding
-                .as_mut()
-                .map(|binding| binding.maybe_to_action(args))
-                .flatten()
-                .map(|vel| InputActions::SetPlayerMovement(vel.into())),
-            _ => None,
-        }
+        self.move_binding
+            .as_mut()
+            .map(|binding| binding.maybe_to_action(&input))
+            .flatten()
+            .map(|velocity| InputActions::SetPlayerMovement(velocity.into()))
+            .or_else(|| {
+                self.attack_binding
+                    .as_mut()
+                    .map(|binding| binding.maybe_to_action(&input))
+                    .flatten()
+                    .map(|state| {
+                        if state {
+                            InputActions::Attack
+                        } else {
+                            InputActions::Nop
+                        }
+                    })
+            })
     }
 }
 
@@ -60,11 +73,16 @@ impl<'a> Inputs<'a> {
     pub fn new() -> Self {
         Self {
             move_binding: None,
+            attack_binding: None,
             phantom: PhantomData::default(),
         }
     }
 
     pub fn bind_movement(&mut self, binding: Axis2dBinding) {
         self.move_binding.replace(binding);
+    }
+
+    pub fn bind_attack(&mut self, binding: ButtonBinding) {
+        self.attack_binding.replace(binding);
     }
 }

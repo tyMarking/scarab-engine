@@ -9,6 +9,12 @@ pub struct Player {
     pub entity: Entity,
 }
 
+impl Player {
+    pub fn attack(&mut self) {
+        println!("attack!!");
+    }
+}
+
 impl<'a, 'b: 'a> HasEntity<'a, 'b> for Player {
     fn get_entity(&'b self) -> &'a Entity {
         &self.entity
