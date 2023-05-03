@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use opengl_graphics::{GlGraphics, OpenGL};
-use piston::{Button, ButtonState, EventSettings, Key, Window, WindowSettings};
+use piston::{ButtonState, EventSettings, Key, Window, WindowSettings};
 
 use scarab_engine::{
     gameobject::{
         field::{Cell, CellColorView, Field, FieldColorView},
         Entity, NO_SOLIDITY, SOLID,
     },
-    input::{Axis2dBinding, ButtonBinding},
+    input::{ButtonBinding, LogicalDpad, SingleButton, VirtualDpad},
     rendering::{
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
@@ -152,15 +152,18 @@ fn main() -> ScarabResult<()> {
 
     // Use WASD inputs (reminder that up is negative y)
     let mut input_registry = Inputs::new();
-    input_registry.bind_movement(Axis2dBinding::new(
-        Button::Keyboard(Key::D),
-        Button::Keyboard(Key::S),
-        Button::Keyboard(Key::A),
-        Button::Keyboard(Key::W),
-    ));
+    input_registry.bind_movement(
+        LogicalDpad::from(VirtualDpad::new(
+            SingleButton::Keyboard(Key::D),
+            SingleButton::Keyboard(Key::S),
+            SingleButton::Keyboard(Key::A),
+            SingleButton::Keyboard(Key::W),
+        ))
+        .into(),
+    );
     input_registry.bind_attack(ButtonBinding::new(
         ButtonState::Press,
-        Button::Mouse(piston::MouseButton::Left),
+        SingleButton::Mouse(piston::MouseButton::Left),
     ));
 
     // NOTE: All of the above code is reponsible for initializing the game state

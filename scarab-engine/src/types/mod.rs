@@ -1,6 +1,7 @@
 use core::ops::{Add, Mul, Sub};
 
 use graphics::types::{Scalar, Vec2d};
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
@@ -9,6 +10,11 @@ pub mod physbox;
 
 pub use physbox::*;
 use uuid::Uuid;
+
+lazy_static! {
+    /// Pre-calculate the square root of 2
+    pub static ref ROOT_2: f64 = f64::sqrt(2.0);
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 /// Represents the edges of a rectangular game object

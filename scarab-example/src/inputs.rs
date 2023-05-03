@@ -2,7 +2,7 @@ use core::marker::PhantomData;
 
 use piston::Input;
 use scarab_engine::{
-    input::{Axis2dBinding, ButtonBinding, InputBinding, InputRegistry},
+    input::{ButtonBinding, InputBinding, InputRegistry, UnitAxis2dBinding},
     ScarabResult, Velocity,
 };
 use serde::{Deserialize, Serialize};
@@ -18,7 +18,7 @@ pub enum InputActions {
 
 #[derive(Serialize, Deserialize)]
 pub struct Inputs<'a> {
-    move_binding: Option<Axis2dBinding>,
+    move_binding: Option<UnitAxis2dBinding>,
     attack_binding: Option<ButtonBinding>,
     phantom: PhantomData<&'a u8>,
 }
@@ -78,7 +78,7 @@ impl<'a> Inputs<'a> {
         }
     }
 
-    pub fn bind_movement(&mut self, binding: Axis2dBinding) {
+    pub fn bind_movement(&mut self, binding: UnitAxis2dBinding) {
         self.move_binding.replace(binding);
     }
 
