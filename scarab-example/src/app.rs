@@ -1,5 +1,4 @@
-use std::fs::File;
-use std::io::Write;
+use std::{fmt::Debug, fs::File, io::Write};
 
 use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
@@ -104,7 +103,7 @@ impl<'a, 'e, 's, E, V, I> App<'a, Window> for ExampleApp<E, V, I>
 where
     'a: 's,
     's: 'e,
-    E: RegisteredEntity + 'static,
+    E: RegisteredEntity + Debug + 'static,
     E: Serialize,
     V: View<Viewed = Field>,
     V: Serialize,
@@ -184,7 +183,7 @@ pub struct AppData<E, V, I> {
 impl<'e, 's, A, E, V, I> AppData<E, V, I>
 where
     's: 'e,
-    E: RegisteredEntity + 'static,
+    E: RegisteredEntity + Debug + 'static,
     V: View<Viewed = Field>,
     I: InputRegistry<InputActions = A, InputTarget = E::Player<'e, 's>>,
 {

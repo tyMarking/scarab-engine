@@ -14,6 +14,8 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use self::registry::GameTickArgs;
+
 use super::Field;
 
 /// Handles the registration of entities (loading and unloading)
@@ -94,8 +96,8 @@ impl Entity {
     }
 
     /// Returns a callback function for resolving entity-entity collisions
-    pub fn game_tick(&mut self, field: &Field, dt: f64) -> PhysicsResult<()> {
-        self.try_move(field, dt)
+    pub fn game_tick<E>(&mut self, args: &GameTickArgs<E>) -> PhysicsResult<()> {
+        self.try_move(args.field, args.dt)
     }
 
     /// Attempts to move this entity according to its velocity until it collides

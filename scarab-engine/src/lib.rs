@@ -1,4 +1,5 @@
 #![warn(missing_docs)]
+#![feature(drain_filter)]
 
 //! The Scarab Engine Library
 ///

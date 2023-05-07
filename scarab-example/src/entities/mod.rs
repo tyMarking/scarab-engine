@@ -6,13 +6,19 @@ use piston::RenderArgs;
 pub use player::{Player, PlayerAnimations};
 use scarab_engine::{
     error::RenderResult,
-    gameobject::{entity::registry::RegisteredEntity, Entity},
+    gameobject::{
+        entity::{
+            registry::{GameTickArgs, RegisteredEntity},
+            HasEntity,
+        },
+        Entity,
+    },
     rendering::{
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, StaticAnimation},
         View,
     },
-    HasUuid,
+    HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -28,8 +34,8 @@ impl RegisteredEntity for ExampleEntities {
 
     fn inner_entity(&self) -> &Entity {
         match self {
-            Self::Player((player, _view)) => &player.entity,
-            Self::Enemy((enemy, _view)) => &enemy.entity,
+            Self::Player((player, _view)) => &player.get_entity(),
+            Self::Enemy((enemy, _view)) => &enemy.get_entity(),
         }
     }
 
@@ -49,12 +55,22 @@ impl RegisteredEntity for ExampleEntities {
         gl: &mut opengl_graphics::GlGraphics,
     ) -> RenderResult<()> {
         match self {
-            Self::Player((player, view)) => {
-                view.render(&player.entity, args, camera, ctx, texture_registry, gl)
-            }
-            Self::Enemy((enemy, view)) => {
-                view.render(&enemy.entity, args, camera, ctx, texture_registry, gl)
-            }
+            Self::Player((player, view)) => view.render(
+                &player.get_entity_mut(),
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            ),
+            Self::Enemy((enemy, view)) => view.render(
+                &enemy.get_entity_mut(),
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            ),
         }
     }
 
@@ -75,13 +91,22 @@ impl RegisteredEntity for ExampleEntities {
             _ => None,
         }
     }
+
+    fn game_tick(&mut self, this_idx: usize, args: &mut GameTickArgs<Self>) -> ScarabResult<()> {
+        match self {
+            ExampleEntities::Player((player, _)) => player.game_tick(this_idx, args),
+            ExampleEntities::Enemy((enemy, _)) => {
+                enemy.entity.game_tick(args).map_err(|e| e.into())
+            }
+        }
+    }
 }
 
 impl HasUuid for ExampleEntities {
     fn uuid(&self) -> Uuid {
         match self {
-            ExampleEntities::Player((player, _view)) => player.entity.uuid(),
-            ExampleEntities::Enemy((enemy, _view)) => enemy.entity.uuid(),
+            ExampleEntities::Player((player, _view)) => player.uuid(),
+            ExampleEntities::Enemy((enemy, _view)) => enemy.uuid(),
         }
     }
 }

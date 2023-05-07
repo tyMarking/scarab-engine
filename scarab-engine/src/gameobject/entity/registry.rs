@@ -4,8 +4,11 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry, Camera, HasUuid,
-    ScarabResult,
+    error::RenderResult,
+    gameobject::{Entity, Field},
+    rendering::registry::TextureRegistry,
+    scene::PendingAttack,
+    Camera, HasUuid, ScarabResult,
 };
 
 use super::HasEntity;
@@ -14,7 +17,10 @@ use super::HasEntity;
 // variants impl HasEntity
 /// A trait for types that can be a registered entity
 /// This is commonly an enum whose variants are tuples containing Entity and some Entity View
-pub trait RegisteredEntity: HasUuid {
+pub trait RegisteredEntity: HasUuid
+where
+    Self: Sized,
+{
     /// The type of entity that is the player
     type Player<'e, 's: 'e>: HasEntity<'e, 's>;
 
@@ -30,6 +36,13 @@ pub trait RegisteredEntity: HasUuid {
     /// If this is a player variant, returns Some(self), otherwise None
     fn maybe_player_mut<'e, 's: 'e>(&mut self) -> Option<&mut Self::Player<'e, 's>>;
 
+    /// Runs the game tick update for the entity. By default runs the gametick on the inner entity
+    fn game_tick(&mut self, _this_idx: usize, args: &mut GameTickArgs<Self>) -> ScarabResult<()> {
+        self.inner_entity_mut()
+            .game_tick(args)
+            .map_err(|e| e.into())
+    }
+
     /// Controls how the registered object renders the inner entity.
     /// This should usually be done by pairing the registered entity with something that impls [crate::rendering::View]
     fn render(
@@ -40,6 +53,17 @@ pub trait RegisteredEntity: HasUuid {
         texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
     ) -> RenderResult<()>;
+}
+
+#[derive(Debug)]
+/// Various arguments used for running game ticks on entities
+pub struct GameTickArgs<'a, E> {
+    /// The field which the updated entity is on
+    pub field: &'a Field,
+    /// The current attacks waiting to be processed in the game loop. Add to this to attack another entity
+    pub pending_attacks: &'a mut Vec<PendingAttack<E>>,
+    /// The change in time for this update
+    pub dt: f64,
 }
 
 /// The registry of all entities that are active in a scene
