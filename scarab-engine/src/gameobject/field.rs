@@ -2,13 +2,16 @@ use core::slice::Iter;
 use graphics::{types::Color, Context};
 use opengl_graphics::GlGraphics;
 use petgraph::{graph::NodeIndex, prelude::DiGraph, stable_graph::DefaultIx, visit::EdgeRef};
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 use std::fmt::Debug;
 
 use crate::{
-    gameobject::Solidity, rendering::View, BoxEdge, Camera, HasBox, HasBoxMut, PhysBox,
-    PhysicsError, PhysicsResult, ScarabResult,
+    error::RenderResult,
+    gameobject::Solidity,
+    rendering::{registry::TextureRegistry, View},
+    BoxEdge, Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult,
 };
 
 use super::{HasSolidity, NO_SOLIDITY, SOLID};
@@ -75,10 +78,10 @@ impl Field {
 
             let this_cell_far_axis = Field::cell_at_idx(graph, this_cell_idx)?
                 .physbox
-                .get_far_axis(edge.perpendicular_axis());
+                .get_far_axis(edge.parallel_axis());
 
             // We iterate in the direction is orthogonal to edge's axis
-            while edge.get_normal_component_of(&test_pos) < this_cell_far_axis {
+            while edge.parallel_axis().component_of_point(&test_pos) < this_cell_far_axis {
                 // Find the cell at the current 'test_pos'. If it exists,
                 // add the edge it's on to neighbors along with wither or not the
                 // edge is typically passable (the corresponding edge can be entered
@@ -87,9 +90,8 @@ impl Field {
                 let new_normal_component = if let Some(cell_at_test_pos) =
                     Field::cell_at_pos_internal(graph.node_weights(), test_pos)
                 {
-                    let new_normal_component = cell_at_test_pos
-                        .physbox
-                        .get_far_axis(edge.perpendicular_axis());
+                    let new_normal_component =
+                        cell_at_test_pos.physbox.get_far_axis(edge.parallel_axis());
                     let edge_is_passable = Field::cell_at_idx(graph, this_cell_idx)?
                         .solidity
                         .exit_edge(edge)
@@ -105,7 +107,7 @@ impl Field {
                     );
                     new_normal_component
                 } else {
-                    edge.get_normal_component_of(&test_pos) + 1.0
+                    edge.parallel_axis().component_of_point(&test_pos) + 1.0
                 };
 
                 test_pos = match edge {
@@ -129,11 +131,11 @@ impl Field {
             let mut test_pos;
 
             // Along the top edge
-            test_pos = physbox.pos() - [0.0, 1.0];
+            test_pos = *physbox.pos() - [0.0, 1.0];
             cell_edges(cell_idx, graph, test_pos, BoxEdge::Top)?;
 
             // Along the left edge
-            test_pos = physbox.pos() - [1.0, 0.0];
+            test_pos = *physbox.pos() - [1.0, 0.0];
             cell_edges(cell_idx, graph, test_pos, BoxEdge::Left)?;
 
             // Along the bottom edge
@@ -181,7 +183,7 @@ impl Field {
         cell: &Cell,
         physbox: &PhysBox,
     ) -> PhysicsResult<CellNeighbors> {
-        let mut neighbors = CellNeighbors::new();
+        let mut neighbors = CellNeighbors::default();
 
         for graph_edge in self.graph.edges(cell.i) {
             let neighbor = Field::cell_at_idx(&self.graph, graph_edge.target())?;
@@ -195,41 +197,49 @@ impl Field {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FieldView {
-    pub solid_view: CellView,
-    pub air_view: CellView,
-    pub default_view: CellView,
+/// Renders a Field, coloring all cells with a color determined by their solidity
+/// i.e. all cells of a unique solidity are a single color
+pub struct FieldColorView {
+    /// The color view for completely solid cells
+    pub solid_view: CellColorView,
+    /// The color view for completely passable cells
+    pub air_view: CellColorView,
+    /// The color view for all other cells
+    pub default_view: CellColorView,
 }
 
-impl FieldView {
-    fn view_for_cell(&self, cell: &Cell) -> &CellView {
+impl FieldColorView {
+    fn view_for_cell(&mut self, cell: &Cell) -> &mut CellColorView {
         match cell.solidity {
-            SOLID => &self.solid_view,
-            NO_SOLIDITY => &self.air_view,
-            _ => &self.default_view,
+            SOLID => &mut self.solid_view,
+            NO_SOLIDITY => &mut self.air_view,
+            _ => &mut self.default_view,
         }
     }
 }
 
-impl View for FieldView {
+impl View for FieldColorView {
     type Viewed = Field;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
+        args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
+        texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
+    ) -> RenderResult<()> {
         for cell in viewed.graph.node_weights() {
             let cell_view = self.view_for_cell(cell);
-            cell_view.render(cell, camera, ctx, gl)?;
+            cell_view.render(cell, args, camera, ctx, texture_registry, gl)?;
         }
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// Represents a static area on a Field that determines the passability for other standard entities
 pub struct Cell {
     /// This cell's index in the Field's `Vec<Cell>`
     i: NodeIndex<DefaultIx>,
@@ -240,6 +250,7 @@ pub struct Cell {
 }
 
 impl Cell {
+    /// Creates a new cell with the given Solidity and PhysBox
     pub fn new(solidity: Solidity, physbox: PhysBox) -> Self {
         Self {
             i: NodeIndex::new(0),
@@ -268,7 +279,7 @@ impl HasSolidity for Cell {
 }
 
 /// Represents the neighbors of a cell organized by what edge the neighbor is on
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct CellNeighbors<'a> {
     top: Vec<&'a Cell>,
     left: Vec<&'a Cell>,
@@ -277,15 +288,7 @@ pub struct CellNeighbors<'a> {
 }
 
 impl<'a> CellNeighbors<'a> {
-    pub fn new() -> Self {
-        Self {
-            top: Vec::new(),
-            left: Vec::new(),
-            bottom: Vec::new(),
-            right: Vec::new(),
-        }
-    }
-
+    /// Adds a neighbor to this cell along the given edge
     pub fn add_neighbor(&mut self, neighbor: &'a Cell, edge: BoxEdge) {
         match edge {
             BoxEdge::Top => self.top.push(neighbor),
@@ -295,6 +298,7 @@ impl<'a> CellNeighbors<'a> {
         }
     }
 
+    /// Gets all neighbors of the cell that touch the given edge
     pub fn get_neighbors(&self, edge: BoxEdge) -> &Vec<&'a Cell> {
         match edge {
             BoxEdge::Top => &self.top,
@@ -304,6 +308,7 @@ impl<'a> CellNeighbors<'a> {
         }
     }
 
+    /// Iterates across all neighbors of the cell, grouped by the touched edge
     pub fn iter_by_edge(&self) -> CellNeighborsIterByEdge {
         CellNeighborsIterByEdge {
             current_edge: BoxEdge::iter(),
@@ -311,6 +316,7 @@ impl<'a> CellNeighbors<'a> {
         }
     }
 
+    /// Iterates across all neighbors of the cell, not grouped by the touched edge
     pub fn iter_all(&self) -> std::vec::IntoIter<&Cell> {
         let mut all_vec = vec![];
         all_vec.extend_from_slice(&self.top);
@@ -323,7 +329,7 @@ impl<'a> CellNeighbors<'a> {
 
 impl<'a> From<Vec<(BoxEdge, &'a Cell)>> for CellNeighbors<'a> {
     fn from(val: Vec<(BoxEdge, &'a Cell)>) -> Self {
-        let mut neighbors = CellNeighbors::new();
+        let mut neighbors = CellNeighbors::default();
 
         for (edge, cell) in val {
             neighbors.add_neighbor(cell, edge);
@@ -333,6 +339,10 @@ impl<'a> From<Vec<(BoxEdge, &'a Cell)>> for CellNeighbors<'a> {
     }
 }
 
+/// Iterates across the neighbors of a cell as grouped by the edge that the neighbors are on
+///
+/// Each item is a tuple `(edge, neighbors): (BoxEdge, &'a Vec<&'a Cell>)`. Where the BoxEdge is the edge of the source cell,
+/// and the `neighbors` is the list of all other [Cell]s that touch the source cell on the source's `edge
 pub struct CellNeighborsIterByEdge<'a> {
     current_edge: Iter<'a, BoxEdge>,
     inner: &'a CellNeighbors<'a>,
@@ -351,21 +361,25 @@ impl<'a> Iterator for CellNeighborsIterByEdge<'a> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CellView {
+/// Renders the cell by filling its PhysBox with the given color
+pub struct CellColorView {
+    /// The color to render the cell with
     pub color: Color,
 }
 
-impl View for CellView {
+impl View for CellColorView {
     type Viewed = Cell;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
+        _args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
+        _texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+    ) -> RenderResult<()> {
+        if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }
 
@@ -415,12 +429,15 @@ mod test {
         let (boxes, field) = create_test_field();
 
         for physbox in &boxes {
-            assert_eq!(field.cell_at_pos(physbox.pos()).unwrap().get_box(), physbox)
+            assert_eq!(
+                field.cell_at_pos(*physbox.pos()).unwrap().get_box(),
+                physbox
+            )
         }
 
         assert_eq!(
             field
-                .cell_at_pos(boxes[0].pos() + [5.0, 5.0])
+                .cell_at_pos(*boxes[0].pos() + [5.0, 5.0])
                 .unwrap()
                 .get_box(),
             &boxes[0]
@@ -428,7 +445,7 @@ mod test {
 
         assert_eq!(
             field
-                .cell_at_pos(boxes[1].pos() + [5.0, 5.0])
+                .cell_at_pos(*boxes[1].pos() + [5.0, 5.0])
                 .unwrap()
                 .get_box(),
             &boxes[1]
@@ -442,13 +459,13 @@ mod test {
         let (boxes, field) = create_test_field();
 
         for physbox in &boxes {
-            let cell_at = field.cell_at_pos(physbox.pos()).unwrap();
+            let cell_at = field.cell_at_pos(*physbox.pos()).unwrap();
             assert_eq!(cell_at.get_box(), physbox);
 
             let neighbors = field
                 .neighbors_of_cell_overlapping_box(cell_at, physbox)
                 .unwrap();
-            assert_eq!(neighbors, CellNeighbors::new());
+            assert_eq!(neighbors, CellNeighbors::default());
         }
     }
 
@@ -457,13 +474,13 @@ mod test {
         let (boxes, field) = create_test_field();
 
         let testbox = PhysBox::new([31.0, 21.0, 8.0, 8.0]).unwrap();
-        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        let cell_at = field.cell_at_pos(*testbox.pos()).unwrap();
         assert_eq!(cell_at.get_box(), &boxes[3]);
 
         let neighbors = field
             .neighbors_of_cell_overlapping_box(cell_at, &testbox)
             .unwrap();
-        assert_eq!(neighbors, CellNeighbors::new());
+        assert_eq!(neighbors, CellNeighbors::default());
     }
 
     #[test]
@@ -472,7 +489,7 @@ mod test {
 
         // Shift it over -6 x
         let testbox = PhysBox::new([25.0, 21.0, 8.0, 8.0]).unwrap();
-        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        let cell_at = field.cell_at_pos(*testbox.pos()).unwrap();
         assert_eq!(cell_at.get_box(), &boxes[1]);
 
         let neighbors = field
@@ -488,7 +505,7 @@ mod test {
         );
         assert_eq!(
             neighbors.get_neighbors(BoxEdge::Right),
-            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+            &vec![field.cell_at_pos(*boxes[3].pos()).unwrap()]
         );
     }
 
@@ -498,7 +515,7 @@ mod test {
 
         // Shift it up -13 y
         let testbox = PhysBox::new([31.0, 8.0, 8.0, 8.0]).unwrap();
-        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        let cell_at = field.cell_at_pos(*testbox.pos()).unwrap();
         assert_eq!(cell_at.get_box(), &boxes[2]);
 
         let neighbors = field
@@ -510,7 +527,7 @@ mod test {
         assert_eq!(neighbors.get_neighbors(BoxEdge::Left), &Vec::<&Cell>::new());
         assert_eq!(
             neighbors.get_neighbors(BoxEdge::Bottom),
-            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+            &vec![field.cell_at_pos(*boxes[3].pos()).unwrap()]
         );
         assert_eq!(
             neighbors.get_neighbors(BoxEdge::Right),
@@ -524,7 +541,7 @@ mod test {
 
         // Shift it left -6 x and down +15 y
         let testbox = PhysBox::new([25.0, 36.0, 8.0, 8.0]).unwrap();
-        let cell_at = field.cell_at_pos(testbox.pos()).unwrap();
+        let cell_at = field.cell_at_pos(*testbox.pos()).unwrap();
         assert_eq!(cell_at.get_box(), &boxes[1]);
 
         let neighbors = field
@@ -536,11 +553,11 @@ mod test {
         assert_eq!(neighbors.get_neighbors(BoxEdge::Left), &Vec::<&Cell>::new());
         assert_eq!(
             neighbors.get_neighbors(BoxEdge::Bottom),
-            &vec![field.cell_at_pos(boxes[4].pos()).unwrap()]
+            &vec![field.cell_at_pos(*boxes[4].pos()).unwrap()]
         );
         assert_eq!(
             neighbors.get_neighbors(BoxEdge::Right),
-            &vec![field.cell_at_pos(boxes[3].pos()).unwrap()]
+            &vec![field.cell_at_pos(*boxes[3].pos()).unwrap()]
         );
     }
 }

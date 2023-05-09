@@ -6,6 +6,7 @@ use super::BoxEdge;
 use crate::{Axis, PhysicsError, PhysicsResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// A rectangular physics object
 pub struct PhysBox {
     pos: Point,
     size: Size,
@@ -20,6 +21,8 @@ impl PhysBox {
         }
     }
 
+    /// Creates a new PhysBox at the given point with the given size.
+    /// The width and height must each be greater than 0.
     pub fn new([x, y, w, h]: [f64; 4]) -> PhysicsResult<Self> {
         let pos = [x, y].into();
         let size = [w, h].into();
@@ -27,22 +30,28 @@ impl PhysBox {
         Ok(Self { pos, size })
     }
 
-    pub fn pos(&self) -> Point {
-        self.pos
+    /// A reference to the position of this game object
+    pub fn pos(&self) -> &Point {
+        &self.pos
     }
 
+    /// A mutable reference to the position of this game object
     pub fn pos_mut(&mut self) -> &mut Point {
         &mut self.pos
     }
 
+    /// Sets the position of this game object to the given position
     pub fn set_pos(&mut self, pos: Point) {
         self.pos = pos;
     }
 
-    pub fn size(&self) -> Size {
-        self.size
+    /// A reference to the size of this game object
+    pub fn size(&self) -> &Size {
+        &self.size
     }
 
+    /// Attempts to set the size of this game object.
+    /// Fails if the new size has a width or height that are <= 0
     pub fn set_size(&mut self, size: Size) -> PhysicsResult<()> {
         Self::validate(self.pos, size)?;
         self.size = size;
@@ -256,6 +265,7 @@ impl PhysBox {
         edges
     }
 
+    /// Is the given edge of self crossed by other
     pub fn is_edge_crossed_by(&self, other: &Self, edge: BoxEdge) -> bool {
         match edge {
             BoxEdge::Top => self.is_top_edge_crossed_by(other),
@@ -265,18 +275,22 @@ impl PhysBox {
         }
     }
 
+    /// Is the top edge of self crossed by other
     pub fn is_top_edge_crossed_by(&self, other: &Self) -> bool {
         other.pos.y < self.pos.y && other.bottom_y() > self.pos.y
     }
 
+    /// Is the left edge of self crossed by other
     pub fn is_left_edge_crossed_by(&self, other: &Self) -> bool {
         other.pos.x < self.pos.x && other.right_x() > self.pos.x
     }
 
+    /// Is the bottom edge of self crossed by other
     pub fn is_bottom_edge_crossed_by(&self, other: &Self) -> bool {
         other.pos.y < self.bottom_y() && other.bottom_y() > self.bottom_y()
     }
 
+    /// Is the right edge of self crossed by other
     pub fn is_right_edge_crossed_by(&self, other: &Self) -> bool {
         other.pos.x < self.right_x() && other.right_x() > self.right_x()
     }
@@ -296,11 +310,13 @@ impl HasBoxMut for PhysBox {
 
 /// A trait for game objects that wrap a physbox
 pub trait HasBox {
+    /// A reference to the game object's PhysBox
     fn get_box(&self) -> &PhysBox;
 }
 
 /// A trait for game objects that wrap a mutable physbox
 pub trait HasBoxMut {
+    /// A mutable reference to the game object's PhysBox
     fn get_box_mut(&mut self) -> &mut PhysBox;
 }
 

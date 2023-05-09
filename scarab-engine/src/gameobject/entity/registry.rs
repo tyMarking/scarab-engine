@@ -1,28 +1,34 @@
-use std::sync::mpsc::TryRecvError;
-
+use graphics::Context;
+use opengl_graphics::GlGraphics;
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
-use crate::{gameobject::Entity, rendering::View, HasUuid, PhysicsResult};
-
-pub type ControlResult<T> = Result<T, ControlError>;
-
-#[derive(Debug, Error, PartialEq)]
-pub enum ControlError {
-    #[error(transparent)]
-    MpscReceive(#[from] TryRecvError),
-}
+use crate::{
+    error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry, Camera, HasUuid,
+    PhysicsResult,
+};
 
 // TODO: Eventually meant to be a trait that can be derived for enums whose
 // variants impl HasEntity
 /// A trait for types that can be a registered entity
 /// This is commonly an enum whose variants are tuples containing Entity and some Entity View
 pub trait RegisteredEntity: HasUuid {
+    /// A reference to the registered object's inner entity
     fn inner_entity(&self) -> &Entity;
 
+    /// A mutable reference to the registered object's inner entity
     fn inner_entity_mut(&mut self) -> &mut Entity;
 
-    fn inner_view(&self) -> Box<dyn View<Viewed = Entity> + '_>;
+    /// Controls how the registered object renders the inner entity.
+    /// This should usually be done by pairing the registered entity with something that impls [crate::rendering::View]
+    fn render(
+        &mut self,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> RenderResult<()>;
 }
 
 /// The registry of all entities that are active in a scene
@@ -38,27 +44,33 @@ impl<E> Default for EntityRegistry<E> {
 }
 
 impl<E: RegisteredEntity> EntityRegistry<E> {
+    /// Attempts to register a new entity to the scene
     pub fn register(&mut self, to_register: E) -> PhysicsResult<()> {
         self.inner.push(to_register);
         Ok(())
     }
 
+    /// The number of currently registered entities
     pub fn len(&self) -> usize {
         self.inner.len()
     }
 
+    /// Gets a reference to the registered entity at the given index if it exists
     pub fn get_one(&self, i: usize) -> Option<&E> {
         self.inner.get(i)
     }
 
+    /// Gets a mutable reference to the registered entity at the given index if it exists
     pub fn get_one_mut(&mut self, i: usize) -> Option<&mut E> {
         self.inner.get_mut(i)
     }
 
+    /// Iterates across the registered entities
     pub fn iter(&self) -> core::slice::Iter<'_, E> {
         self.inner.iter()
     }
 
+    /// Iterates across mutable references to the registered entities
     pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, E> {
         self.inner.iter_mut()
     }

@@ -13,16 +13,20 @@ pub trait InputRegistry {
     /// What the input action should act upon
     type InputTarget;
 
+    /// Modifies the `InputTarget` as necessary according to the given action
+    /// i.e. a movement action would set an entity's velocity
     fn do_input_action(
         &self,
         action: Self::InputActions,
         target: &mut Self::InputTarget,
     ) -> ScarabResult<()>;
 
+    /// Given an event input (i.e. key press, mouse movement, etc.) turns it into an instance of `InputActions`
     fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions>;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// A binding between 4 keyboard buttons and a representation of a 2-axis D-pad
 pub struct Axis2dBinding {
     pos_x: (Button, f64),
     neg_x: (Button, f64),
@@ -31,6 +35,7 @@ pub struct Axis2dBinding {
 }
 
 impl Axis2dBinding {
+    /// Makes a new instance of self for the given buttons
     pub fn new(pos_x: Button, pos_y: Button, neg_x: Button, neg_y: Button) -> Self {
         Self {
             pos_x: (pos_x, 0.0),
@@ -40,6 +45,7 @@ impl Axis2dBinding {
         }
     }
 
+    /// Sets the value for the corresponding direction to 1 or 0 depending on the button state
     fn set_axis_button(&mut self, button: ButtonState, dir: Axis2dDirection) {
         let val = match button {
             ButtonState::Press => 1.0,
@@ -71,6 +77,7 @@ impl Axis2dBinding {
         }
     }
 
+    /// If the given [ButtonArgs] match one of the set buttons it returns a 2-d vector representing the axis that the button press would represent
     pub fn maybe_to_action(&mut self, args: ButtonArgs) -> Option<[f64; 2]> {
         if let Some(dir) = self.maybe_direction_from_button(&args) {
             self.set_axis_button(args.state, dir);
@@ -100,9 +107,14 @@ impl From<&mut Axis2dBinding> for [f64; 2] {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// A cardinal direction on a 2-d coorinate plane
 pub enum Axis2dDirection {
+    /// Positive-X direction (left)
     PosX,
+    /// Negative-X direction (right)
     NegX,
+    /// Positive-Y direction (down)
     PosY,
+    /// Negative-Y direction (up)
     NegY,
 }

@@ -4,27 +4,47 @@ use graphics::types::{Scalar, Vec2d};
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
+/// Stuff for rectangular physics items
 pub mod physbox;
 
 pub use physbox::*;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Represents the edges of a rectangular game object
 pub enum BoxEdge {
+    /// The top edge of a game object (negative y)
     Top,
+    /// The left edge of a game object (positive x)
     Left,
+    /// The bottom edge of a game object (positive y)
     Bottom,
+    /// The right edge of a game object (negative x)
     Right,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[repr(usize)]
+/// The axis system where game objects exist
 pub enum Axis {
+    /// The x-axis
     X,
+    /// The y-axis
     Y,
 }
 
+impl Axis {
+    /// Gets the component of the given point along this axis
+    pub fn component_of_point(&self, point: &Point) -> Scalar {
+        match self {
+            Axis::X => point.x,
+            Axis::Y => point.y,
+        }
+    }
+}
+
 impl BoxEdge {
+    /// Returns the BoxEdge opposite to this one
     pub fn opposite(&self) -> BoxEdge {
         match self {
             Self::Top => Self::Bottom,
@@ -34,6 +54,8 @@ impl BoxEdge {
         }
     }
 
+    /// Retuns the vector that is perpendicular to this edge.
+    /// This may also be defined as the vector from the center of a 2-unit square to the respective edge
     pub fn normal_vector(&self) -> [Scalar; 2] {
         match self {
             BoxEdge::Top => [0.0, -1.0],
@@ -43,16 +65,16 @@ impl BoxEdge {
         }
     }
 
-    /// The axis that runs parallel to this edge's normal vector
-    pub fn parallel_axis(&self) -> Axis {
+    /// The axis that runs perpendicular to this edge
+    pub fn perpendicular_axis(&self) -> Axis {
         match self {
             BoxEdge::Top | BoxEdge::Bottom => Axis::Y,
             BoxEdge::Left | BoxEdge::Right => Axis::X,
         }
     }
 
-    /// The axis that runs perpendicular to this edge's normal vector
-    pub fn perpendicular_axis(&self) -> Axis {
+    /// The axis that runs parallel to this edge
+    pub fn parallel_axis(&self) -> Axis {
         match self {
             BoxEdge::Top | BoxEdge::Bottom => Axis::X,
             BoxEdge::Left | BoxEdge::Right => Axis::Y,
@@ -64,22 +86,19 @@ impl BoxEdge {
         static EDGES: [BoxEdge; 4] = [BoxEdge::Top, BoxEdge::Left, BoxEdge::Bottom, BoxEdge::Right];
         EDGES.iter()
     }
-
-    pub fn get_normal_component_of(&self, point: &Point) -> Scalar {
-        match self {
-            BoxEdge::Top | BoxEdge::Bottom => point.x,
-            BoxEdge::Left | BoxEdge::Right => point.y,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// The velocity of a game object
 pub struct Velocity {
+    /// The x component of the velocity
     pub x: Scalar,
+    /// The y component of the velocity
     pub y: Scalar,
 }
 
 impl Velocity {
+    /// Returns a new velocity in the same direction as this velocity, but with a magnitude of 1
     pub fn normalize(self) -> Self {
         let mag = self.magnitude();
         if mag == 0.0 {
@@ -92,10 +111,12 @@ impl Velocity {
         }
     }
 
+    /// The magnitude of this velocity squared
     pub fn magnitude_sq(&self) -> Scalar {
         self.x * self.x + self.y * self.y
     }
 
+    /// The magnitude of this velocity
     pub fn magnitude(&self) -> Scalar {
         f64::sqrt(self.x * self.x + self.y * self.y)
     }
@@ -171,6 +192,8 @@ impl From<Vec2d> for Velocity {
     }
 }
 
+/// A trait for a gameobject that has a unique identifier
 pub trait HasUuid {
+    /// The object's unique identifier
     fn uuid(&self) -> Uuid;
 }

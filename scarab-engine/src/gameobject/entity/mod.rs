@@ -1,28 +1,35 @@
 use crate::{
+    error::RenderResult,
     gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
-    rendering::View,
+    rendering::{registry::TextureRegistry, View},
     Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
 };
 
-pub mod registry;
 use graphics::{
     types::{Color, Scalar},
     Context,
 };
 use opengl_graphics::GlGraphics;
+use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::Field;
 
+/// Handles the registration of entities (loading and unloading)
+pub mod registry;
+
 /// A trait for game objects that wrap/own an entity
 pub trait HasEntity<'a, 'b: 'a> {
+    /// Returns a reference to the game object's inner entity
     fn get_entity(&'b self) -> &'a Entity;
 
+    /// Returns a mutable reference to the game object's inner entity
     fn get_entity_mut(&'b mut self) -> &'a mut Entity;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+/// The basic structure of any non-static object in a game state
 pub struct Entity {
     velocity: Velocity,
     max_velocity: Scalar,
@@ -33,17 +40,19 @@ pub struct Entity {
 }
 
 impl Entity {
-    pub fn new() -> PhysicsResult<Self> {
+    /// Creates an Entity with default settings
+    pub fn new() -> ScarabResult<Self> {
         Ok(Self {
             velocity: [0.0, 0.0].into(),
             max_velocity: 1.0,
             physbox: PhysBox::new([0.0, 0.0, 1.0, 1.0].into())?,
-            health: Health::new(10),
+            health: Health::new(10.0),
             solidity: SOLID,
             uuid: Uuid::new_v4(),
         })
     }
 
+    /// Returns the entity's unique identifier ([Uuid])
     pub fn uuid(&self) -> Uuid {
         self.uuid
     }
@@ -57,8 +66,14 @@ impl Entity {
         }
     }
 
+    /// Gets the entity's current velocity
+    pub fn get_velocity(&self) -> Velocity {
+        self.velocity
+    }
+
+    /// Sets the entity's maximum velocity. Must be greater than or equal to 0
     pub fn set_max_velocity(&mut self, max_velocity: Scalar) -> PhysicsResult<()> {
-        if max_velocity <= 0.0 {
+        if max_velocity < 0.0 {
             return Err(PhysicsError::MaxVelocity);
         }
         self.max_velocity = max_velocity;
@@ -66,6 +81,7 @@ impl Entity {
         Ok(())
     }
 
+    /// Gets the entity's maximum velocity
     pub fn get_max_velocity(&self) -> Scalar {
         self.max_velocity
     }
@@ -73,7 +89,7 @@ impl Entity {
     /// Get the position of the entity after its next movement assuming no collisions
     pub fn get_projected_box(&self) -> PhysBox {
         let mut physbox = self.physbox.clone();
-        physbox.set_pos(physbox.pos() + self.velocity);
+        physbox.set_pos(*physbox.pos() + self.velocity);
         physbox
     }
 
@@ -94,12 +110,12 @@ impl Entity {
         // at the very least only going through those. Even more so, we can add the edges that were
         // crossed.
         let current_cell = field
-            .cell_at_pos(self.physbox.pos())
-            .ok_or_else(|| PhysicsError::NoFieldCell(self.physbox.pos()))?;
+            .cell_at_pos(*self.physbox.pos())
+            .ok_or_else(|| PhysicsError::NoFieldCell(*self.physbox.pos()))?;
         let current_cell_overlaps =
             field.neighbors_of_cell_overlapping_box(current_cell, &self.physbox)?;
 
-        let new_pos = self.physbox.pos() + self.velocity * dt;
+        let new_pos = *self.physbox.pos() + self.velocity * dt;
         let mut new_box = self.physbox.clone();
         new_box.set_pos(new_pos);
 
@@ -179,7 +195,9 @@ impl HasSolidity for Entity {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+/// Renders an entity by filling its PhysBox with the set color
 pub struct EntityView {
+    /// The color to render the entity with
     pub color: Color,
 }
 
@@ -187,31 +205,15 @@ impl View for EntityView {
     type Viewed = Entity;
 
     fn render(
-        &self,
+        &mut self,
         viewed: &Self::Viewed,
+        _args: &RenderArgs,
         camera: &Camera,
         ctx: Context,
+        _texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
-            graphics::rectangle(self.color, rect, transform, gl);
-        }
-
-        Ok(())
-    }
-}
-
-impl View for &EntityView {
-    type Viewed = Entity;
-
-    fn render(
-        &self,
-        viewed: &Self::Viewed,
-        camera: &Camera,
-        ctx: Context,
-        gl: &mut GlGraphics,
-    ) -> ScarabResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.physbox, ctx) {
+    ) -> RenderResult<()> {
+        if let Some((transform, rect)) = camera.box_renderables(&viewed.physbox, ctx) {
             graphics::rectangle(self.color, rect, transform, gl);
         }
 
