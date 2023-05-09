@@ -221,3 +221,30 @@ pub trait TargetsOthers<E>: Debug {
     /// This could be animation states, draining energy or any other necessary effect
     fn update_src(&mut self, src: &mut E) -> ScarabResult<()>;
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn effect_source_always_targets_when_not_source() {
+        let source_index = 0;
+        let mut source: EffectSource = (source_index, false).into();
+
+        assert!(source.should_apply_effect(source_index + 1));
+
+        source.can_target_source = true;
+        assert!(source.should_apply_effect(source_index + 1));
+    }
+
+    #[test]
+    fn effect_source_targets_source_only_when_able() {
+        let source_index = 0;
+        let mut source: EffectSource = (source_index, false).into();
+
+        assert!(!source.should_apply_effect(source_index));
+
+        source.can_target_source = true;
+        assert!(source.should_apply_effect(source_index));
+    }
+}

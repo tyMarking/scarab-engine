@@ -9,7 +9,7 @@ use crate::{
 
 use super::registry::RegisteredEntity;
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq)]
 /// Expresses the readiness of an effect
 pub enum Cooldown {
     /// The effect is ready to be used
@@ -101,5 +101,102 @@ impl<E: RegisteredEntity> TargetsOthers<E> for BasicAttack {
 
     fn update_src(&mut self, _src: &mut E) -> ScarabResult<()> {
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn try_action_sets_doing_when_ready() {
+        let mut try_action = TryAction {
+            try_action: false,
+            cooldown: Cooldown::Ready,
+        };
+
+        try_action.maybe_set_doing();
+
+        assert!(try_action.try_action);
+
+        try_action.maybe_set_doing();
+        assert!(try_action.try_action);
+    }
+
+    #[test]
+    fn try_action_doesnt_set_doing_when_cooling() {
+        let mut try_action = TryAction {
+            try_action: false,
+            cooldown: Cooldown::Cooling(0.0),
+        };
+
+        try_action.maybe_set_doing();
+        assert!(!try_action.try_action);
+    }
+
+    #[test]
+    fn try_action_should_do_only_when_set_to_do() {
+        let mut try_action = TryAction {
+            try_action: false,
+            cooldown: Cooldown::Cooling(0.0),
+        };
+
+        assert!(!try_action.should_do(Cooldown::Cooling(0.0)));
+
+        try_action.cooldown = Cooldown::Ready;
+        assert!(!try_action.should_do(Cooldown::Cooling(0.0)));
+
+        try_action.try_action = true;
+        assert!(try_action.should_do(Cooldown::Cooling(0.0)));
+
+        try_action.try_action = true;
+        try_action.cooldown = Cooldown::Ready;
+        assert!(try_action.should_do(Cooldown::Cooling(0.0)));
+    }
+
+    #[test]
+    fn try_action_should_do_resets_cooldown_only_when_true() {
+        let mut try_action = TryAction {
+            try_action: false,
+            cooldown: Cooldown::Cooling(0.0),
+        };
+
+        assert!(!try_action.should_do(Cooldown::Cooling(5.0)));
+        assert_eq!(try_action.cooldown, Cooldown::Cooling(0.0));
+
+        try_action.try_action = true;
+        try_action.cooldown = Cooldown::Ready;
+        assert!(try_action.should_do(Cooldown::Cooling(5.0)));
+        assert_eq!(try_action.cooldown, Cooldown::Cooling(5.0));
+    }
+
+    #[test]
+    fn cooldown_cool_reduces_remaining_time() {
+        let start = 5.0;
+        let reduction = 2.3;
+        let mut cooldown = Cooldown::Cooling(start);
+
+        cooldown.cool(reduction);
+        assert_eq!(cooldown, Cooldown::Cooling(start - reduction))
+    }
+
+    #[test]
+    fn cooldown_cool_marks_ready_when_zero_or_less() {
+        let start = 5.0;
+        let mut cooldown = Cooldown::Cooling(start);
+
+        cooldown.cool(start);
+        assert_eq!(cooldown, Cooldown::Ready);
+
+        cooldown = Cooldown::Cooling(start);
+        cooldown.cool(start + 1.0);
+        assert_eq!(cooldown, Cooldown::Ready);
+    }
+
+    #[test]
+    fn cooldown_cool_doesnt_change_when_ready() {
+        let mut cooldown = Cooldown::Ready;
+        cooldown.cool(5.0);
+        assert_eq!(cooldown, Cooldown::Ready);
     }
 }

@@ -4,11 +4,8 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::RenderResult,
-    gameobject::{Entity, Field},
-    rendering::registry::TextureRegistry,
-    scene::{GameTickArgs, PendingEffect},
-    Camera, HasUuid, ScarabResult,
+    error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry,
+    scene::GameTickArgs, Camera, HasUuid, ScarabResult,
 };
 
 use super::HasEntity;
