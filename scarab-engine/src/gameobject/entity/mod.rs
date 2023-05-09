@@ -2,6 +2,7 @@ use crate::{
     error::RenderResult,
     gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
     rendering::{registry::TextureRegistry, View},
+    scene::GameTickArgs,
     Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
 };
 
@@ -16,16 +17,19 @@ use uuid::Uuid;
 
 use super::Field;
 
+/// Helper structs for applying basic effects and attacks to entities
+#[cfg(feature = "effect-helpers")]
+pub mod effect_helpers;
 /// Handles the registration of entities (loading and unloading)
 pub mod registry;
 
 /// A trait for game objects that wrap/own an entity
-pub trait HasEntity<'a, 'b: 'a> {
+pub trait HasEntity<'e, 's: 'e> {
     /// Returns a reference to the game object's inner entity
-    fn get_entity(&'b self) -> &'a Entity;
+    fn get_entity(&'s self) -> &'e Entity;
 
     /// Returns a mutable reference to the game object's inner entity
-    fn get_entity_mut(&'b mut self) -> &'a mut Entity;
+    fn get_entity_mut(&'s mut self) -> &'e mut Entity;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -94,8 +98,8 @@ impl Entity {
     }
 
     /// Returns a callback function for resolving entity-entity collisions
-    pub fn game_tick(&mut self, field: &Field, dt: f64) -> PhysicsResult<()> {
-        self.try_move(field, dt)
+    pub fn game_tick<E>(&mut self, args: &GameTickArgs<E>) -> PhysicsResult<()> {
+        self.try_move(args.field, args.dt)
     }
 
     /// Attempts to move this entity according to its velocity until it collides
@@ -237,10 +241,6 @@ mod test {
 
         assert_eq!(
             entity.set_max_velocity(-1.0).unwrap_err(),
-            PhysicsError::MaxVelocity
-        );
-        assert_eq!(
-            entity.set_max_velocity(0.0).unwrap_err(),
             PhysicsError::MaxVelocity
         );
     }

@@ -1533,6 +1533,7 @@ name = "scarab_engine"
 version = "0.1.0"
 dependencies = [
  "derivative",
+ "lazy_static",
  "petgraph",
  "piston",
  "piston2d-graphics 0.42.0",

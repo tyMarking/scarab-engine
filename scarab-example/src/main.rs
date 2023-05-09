@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use opengl_graphics::{GlGraphics, OpenGL};
-use piston::{Button, EventSettings, Key, Window, WindowSettings};
+use piston::{ButtonState, EventSettings, Key, Window, WindowSettings};
 
 use scarab_engine::{
     gameobject::{
         field::{Cell, CellColorView, Field, FieldColorView},
         Entity, NO_SOLIDITY, SOLID,
     },
-    input::Axis2dBinding,
+    input::{ButtonBinding, LogicalDpad, SingleButton, VirtualDpad},
     rendering::{
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
@@ -43,19 +43,17 @@ fn main() -> ScarabResult<()> {
     // Manually construct the field for testing
     let cell0 = Cell::new(SOLID, PhysBox::new([0.0, 0.0, 50.0, 100.0])?);
     let cell1 = Cell::new(SOLID, PhysBox::new([50.0, 50.0, 100.0, 150.0])?);
-    let cell2 = Cell::new(NO_SOLIDITY, PhysBox::new([50.0, 0.0, 200.0, 50.0])?);
-    let cell3 = Cell::new(NO_SOLIDITY, PhysBox::new([150.0, 50.0, 100.0, 250.0])?);
-    let cell4 = Cell::new(NO_SOLIDITY, PhysBox::new([0.0, 200.0, 150.0, 100.0])?);
+    let cell2 = Cell::new(NO_SOLIDITY, PhysBox::new([50.0, 0.0, 590.0, 50.0])?);
+    let cell3 = Cell::new(NO_SOLIDITY, PhysBox::new([150.0, 50.0, 490.0, 310.0])?);
+    let cell4 = Cell::new(NO_SOLIDITY, PhysBox::new([0.0, 200.0, 150.0, 160.0])?);
     let cell5 = Cell::new(NO_SOLIDITY, PhysBox::new([0.0, 100.0, 50.0, 100.0])?);
-    let cell6 = Cell::new(SOLID, PhysBox::new([250.0, 0.0, 1.0, 300.0])?);
-    let cell7 = Cell::new(SOLID, PhysBox::new([0.0, 300.0, 250.0, 1.0])?);
-    let cell8 = Cell::new(SOLID, PhysBox::new([0.0, -1.0, 250.0, 1.0])?);
-    let cell9 = Cell::new(SOLID, PhysBox::new([-1.0, 0.0, 1.0, 300.0])?);
-    // This cell is outside the player accessible area, but is good for letting me know that the pixel-point conversion is working
-    let cella = Cell::new(NO_SOLIDITY, PhysBox::new([0.0, 330.0, 640.0, 30.0])?);
+    let cell6 = Cell::new(SOLID, PhysBox::new([640.0, 0.0, 1.0, 360.0])?);
+    let cell7 = Cell::new(SOLID, PhysBox::new([0.0, 360.0, 640.0, 1.0])?);
+    let cell8 = Cell::new(SOLID, PhysBox::new([0.0, -1.0, 640.0, 1.0])?);
+    let cell9 = Cell::new(SOLID, PhysBox::new([-1.0, 0.0, 1.0, 360.0])?);
 
     let field = Field::new(vec![
-        cell0, cell1, cell2, cell3, cell4, cell5, cell6, cell7, cell8, cell9, cella,
+        cell0, cell1, cell2, cell3, cell4, cell5, cell6, cell7, cell8, cell9,
     ])?;
 
     // The field view has solid cells as black and NO_SOLIDITY cells as white,
@@ -76,13 +74,6 @@ fn main() -> ScarabResult<()> {
     // Create a camera with a 100x100 tile view
     let cambox = PhysBox::new([0.0, 0.0, camera_size[0].into(), camera_size[1].into()])?;
     let camera = Camera::new(cambox, window.size().into());
-
-    // Create the player setting its position, size and max speed
-    let mut p = Entity::new()?;
-    let b = p.get_box_mut();
-    b.set_pos([155.0, 105.0].into());
-    b.set_size([20.0, 20.0].into())?;
-    p.set_max_velocity(75.0)?;
 
     let texture_registry = TextureRegistry::new(
         // This ends up being the path from cwd to the assets. It has to change depending on deployment
@@ -119,15 +110,6 @@ fn main() -> ScarabResult<()> {
     player_animation_states.insert(PlayerAnimations::Run, player_run);
     let player_view = AnimationStateMachine::new(PlayerAnimations::Idle, player_animation_states)?;
 
-    let player = Player { entity: p };
-
-    // Create the enemy setting its position, size and max speed
-    let mut r = Entity::new()?;
-    let b = r.get_box_mut();
-    b.set_pos([180.0, 160.0].into());
-    b.set_size([15.0, 15.0].into())?;
-    r.set_max_velocity(50.0)?;
-
     let enemy_view = AnimationStateMachine::static_animation(SpriteAnimation::new(
         [56.0, 70.0].into(),
         [128.0, 128.0].into(),
@@ -137,6 +119,22 @@ fn main() -> ScarabResult<()> {
         None,
         &texture_registry,
     )?);
+
+    // Create the player setting its position, size and max speed
+    let mut p = Entity::new()?;
+    let b = p.get_box_mut();
+    b.set_pos([310.0, 170.0].into());
+    b.set_size([20.0, 20.0].into())?;
+    p.set_max_velocity(75.0)?;
+    let player = Player::new(p, 2.0, 1.0);
+
+    // Create the enemy setting its position, size and max speed
+    let mut r = Entity::new()?;
+    let b = r.get_box_mut();
+    b.set_pos([180.0, 230.0].into());
+    b.set_size([15.0, 15.0].into())?;
+    r.set_max_velocity(50.0)?;
+
     let enemy = Enemy { entity: r };
 
     // Create the second enemy setting its position, size and max speed
@@ -148,20 +146,24 @@ fn main() -> ScarabResult<()> {
 
     let enemy2 = Enemy { entity: r };
 
-    // Currently the order for entity registration is very important.
-    // The implementation of 'Scene' assumes that the first registered entity is
-    // the player
     scene.register_entity(ExampleEntities::Player((player, player_view)))?;
     scene.register_entity(ExampleEntities::Enemy((enemy, enemy_view.clone())))?;
     scene.register_entity(ExampleEntities::Enemy((enemy2, enemy_view)))?;
 
     // Use WASD inputs (reminder that up is negative y)
     let mut input_registry = Inputs::new();
-    input_registry.bind_movement(Axis2dBinding::new(
-        Button::Keyboard(Key::D),
-        Button::Keyboard(Key::S),
-        Button::Keyboard(Key::A),
-        Button::Keyboard(Key::W),
+    input_registry.bind_movement(
+        LogicalDpad::from(VirtualDpad::new(
+            SingleButton::Keyboard(Key::D),
+            SingleButton::Keyboard(Key::S),
+            SingleButton::Keyboard(Key::A),
+            SingleButton::Keyboard(Key::W),
+        ))
+        .into(),
+    );
+    input_registry.bind_attack(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Mouse(piston::MouseButton::Left),
     ));
 
     // NOTE: All of the above code is reponsible for initializing the game state
