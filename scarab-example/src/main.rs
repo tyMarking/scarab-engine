@@ -126,7 +126,7 @@ fn main() -> ScarabResult<()> {
     b.set_pos([310.0, 170.0].into());
     b.set_size([20.0, 20.0].into())?;
     p.set_max_velocity(75.0)?;
-    let player = Player::new(p);
+    let player = Player::new(p, 2.0, 1.0);
 
     // Create the enemy setting its position, size and max speed
     let mut r = Entity::new()?;

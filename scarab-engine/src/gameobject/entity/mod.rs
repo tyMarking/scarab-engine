@@ -18,6 +18,9 @@ use self::registry::GameTickArgs;
 
 use super::Field;
 
+/// Helper structs for applying basic effects and attacks to entities
+#[cfg(feature = "effect-helpers")]
+pub mod effect_helpers;
 /// Handles the registration of entities (loading and unloading)
 pub mod registry;
 

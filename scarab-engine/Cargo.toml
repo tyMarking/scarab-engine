@@ -24,3 +24,7 @@ winit = "0.24.0"
 [lib]
 crate-type = ["rlib"]
 edition = "2021"
+
+[features]
+default = []
+effect-helpers = []

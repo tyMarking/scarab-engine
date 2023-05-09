@@ -7,7 +7,7 @@ use crate::{
     error::RenderResult,
     gameobject::{Entity, Field},
     rendering::registry::TextureRegistry,
-    scene::PendingAttack,
+    scene::PendingEffect,
     Camera, HasUuid, ScarabResult,
 };
 
@@ -61,7 +61,7 @@ pub struct GameTickArgs<'a, E> {
     /// The field which the updated entity is on
     pub field: &'a Field,
     /// The current attacks waiting to be processed in the game loop. Add to this to attack another entity
-    pub pending_attacks: &'a mut Vec<PendingAttack<E>>,
+    pub pending_attacks: &'a mut Vec<PendingEffect<E>>,
     /// The change in time for this update
     pub dt: f64,
 }

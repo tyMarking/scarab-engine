@@ -1,14 +1,13 @@
-use graphics::types::Scalar;
 use scarab_engine::{
     gameobject::{
         entity::{
-            registry::{GameTickArgs, RegisteredEntity},
+            effect_helpers::{BasicAttack, Cooldown, TryAction},
+            registry::GameTickArgs,
             HasEntity,
         },
-        Entity, HasHealth,
+        Entity,
     },
     rendering::sprite::AnimationStates,
-    scene::{Attack, PendingAttack},
     HasBox, HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};
@@ -19,19 +18,19 @@ use super::ExampleEntities;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {
     pub entity: Entity,
-    try_attack: TryAttack,
+    attack: (TryAction, BasicAttack, f64),
 }
 
 impl Player {
-    pub fn new(entity: Entity) -> Self {
+    pub fn new(entity: Entity, damage: f64, cooldown: f64) -> Self {
         Self {
             entity,
-            try_attack: TryAttack::default(),
+            attack: (TryAction::default(), BasicAttack::new(damage), cooldown),
         }
     }
 
     pub fn attack(&mut self) {
-        self.try_attack.maybe_set_attacking();
+        self.attack.0.maybe_set_doing();
     }
 
     pub fn game_tick(
@@ -41,19 +40,15 @@ impl Player {
     ) -> ScarabResult<()> {
         self.entity.game_tick(args)?;
 
-        self.try_attack.cooldown.cool(args.dt);
+        self.attack.0.cooldown.cool(args.dt);
 
-        if self.try_attack.maybe_attack(Cooldown::Cooling(2.0)) {
+        if self.attack.0.should_do(Cooldown::Cooling(self.attack.2)) {
             let mut target_area = self.entity.get_box().clone();
             let size = self.entity.get_box().size();
             let _ = target_area.set_size([size.w * 2.0, size.h * 2.0].into());
             target_area.set_pos(*self.entity.get_box().pos() - Point::from([size.w, size.h]));
-            args.pending_attacks.push(PendingAttack {
-                src_idx: this_idx,
-                can_target_src: false,
-                target_area,
-                attack: Box::new(BasicAttack::new(2.0)),
-            })
+            args.pending_attacks
+                .push(self.attack.1.into_pending_effect(this_idx, target_area));
         }
 
         Ok(())
@@ -73,81 +68,6 @@ impl<'a, 'b: 'a> HasEntity<'a, 'b> for Player {
 impl HasUuid for Player {
     fn uuid(&self) -> uuid::Uuid {
         self.entity.uuid()
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default, Clone, Copy)]
-pub enum Cooldown {
-    #[default]
-    Ready,
-    Cooling(f64),
-}
-
-impl Cooldown {
-    fn cool(&mut self, dt: f64) {
-        match self {
-            Self::Ready => {}
-            Self::Cooling(remaining) => {
-                *remaining -= dt;
-                if *remaining <= 0.0 {
-                    *self = Self::Ready;
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Default)]
-pub struct TryAttack {
-    // Should the attached entity attempt to attack on the next update
-    try_attack: bool,
-    cooldown: Cooldown,
-}
-
-impl TryAttack {
-    /// If the cooldown is ready, marks the entity to attack on the next update
-    fn maybe_set_attacking(&mut self) {
-        match self.cooldown {
-            Cooldown::Ready => self.try_attack = true,
-            Cooldown::Cooling(_) => {}
-        }
-    }
-
-    fn maybe_attack(&mut self, cooldown: Cooldown) -> bool {
-        if self.try_attack {
-            self.try_attack = false;
-            self.cooldown = cooldown;
-            true
-        } else {
-            false
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
-pub struct BasicAttack {
-    damage: Scalar,
-}
-
-impl BasicAttack {
-    fn new(damage: Scalar) -> Self {
-        Self { damage }
-    }
-}
-
-impl Attack<ExampleEntities> for BasicAttack {
-    fn do_attack(&mut self, target: &mut ExampleEntities) -> ScarabResult<bool> {
-        println!("Attacked target: {:?}", target);
-
-        target
-            .inner_entity_mut()
-            .get_health_mut()
-            .raw_damage(self.damage);
-        Ok(false)
-    }
-
-    fn update_src(&mut self, _src: &mut ExampleEntities) -> ScarabResult<()> {
-        Ok(())
     }
 }
 

@@ -23,7 +23,7 @@ pub struct Scene<E, V> {
     entity_registry: EntityRegistry<E>,
     #[serde(skip)]
     #[serde(default = "Vec::new")]
-    pending_attacks: Vec<PendingAttack<E>>,
+    pending_attacks: Vec<PendingEffect<E>>,
 }
 
 impl<E, V> Scene<E, V>
@@ -82,7 +82,7 @@ where
 
         self.handle_entity_collisions()?;
 
-        self.process_pending_attacks()?;
+        self.process_pending_effects()?;
 
         Ok(())
     }
@@ -122,38 +122,41 @@ where
         Ok(())
     }
 
-    fn process_pending_attacks(&mut self) -> ScarabResult<()> {
-        let _ = self.pending_attacks.drain_filter(|attack| {
-            let keep_attack = self
+    fn process_pending_effects(&mut self) -> ScarabResult<()> {
+        let _ = self.pending_attacks.drain_filter(|effect| {
+            let keep_effect = self
                 .entity_registry
                 .iter_mut()
                 .enumerate()
                 .filter_map(|(i, e)| {
                     // TODO! remove inefficient retrieval of overlapping entities
                     // Do not attack if it's the source and the source can't be targeted
-                    if !(!attack.can_target_src && i == attack.src_idx)
-                        && e.inner_entity().get_box().has_overlap(&attack.target_area)
+                    if effect.source.map_or(true, |s| s.should_apply_effect(i))
+                        && e.inner_entity().get_box().has_overlap(&effect.target_area)
                     {
-                        let res = attack.attack.do_attack(e).ok();
+                        let res = effect.effect.apply_effect(e).ok();
                         Some(res).flatten()
                     } else {
                         None
                     }
                 })
                 .any(|b| b);
-            self.entity_registry
-                .get_one_mut(attack.src_idx)
-                .map(|src| attack.attack.update_src(src))
-                .or_else(|| {
-                    println!(
-                        "error processing attack: could not find source entity: {:?}",
-                        attack
-                    );
-                    None
-                });
+
+            effect.source.map(|s| {
+                self.entity_registry
+                    .get_one_mut(s.index)
+                    .map(|source_entity| effect.effect.update_src(source_entity))
+                    .or_else(|| {
+                        println!(
+                            "error processing attack: could not find source entity: {:?}",
+                            effect
+                        );
+                        None
+                    });
+            });
 
             // Drain filter *REMOVES* when true
-            !keep_attack
+            !keep_effect
         });
 
         Ok(())
@@ -161,27 +164,49 @@ where
 }
 
 #[derive(Debug)]
-/// An attack that the scene should process on the next game tick
-pub struct PendingAttack<E> {
-    /// The entity registry index of the attack's source entity
-    pub src_idx: usize,
-    /// Should the attack be able to target the source entity
-    pub can_target_src: bool,
+/// An effect on other entities that the scene should process on the next game tick
+pub struct PendingEffect<E> {
+    /// An optional source of the effect
+    pub source: Option<EffectSource>,
     /// The attack's target area
-    /// TODO: this could be changed into a more generalized "AttackTarget" which could just
+    /// TODO: this could be changed into a more generalized "EffectTarget" which could just
     /// get the nearest "n" entities within a range for example
     pub target_area: PhysBox,
-    /// Handles the logic of doing the attack on the enemy
-    pub attack: Box<dyn Attack<E>>,
+    /// Handles the logic of applying the effect
+    pub effect: Box<dyn TargetsOthers<E>>,
 }
 
-/// Attacks that can be done targeting an enemy
-pub trait Attack<E>: Debug {
-    /// Apply the main effect of the attack to the target entity (i.e. do damage, apply status effects, etc.)
-    /// Returns whether or not the attack needs to process on the next tick
-    fn do_attack(&mut self, target: &mut E) -> ScarabResult<bool>;
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// A source of an effect
+pub struct EffectSource {
+    /// The source's registry index
+    pub index: usize,
+    /// Whether or not the effect should target the source
+    pub can_target_source: bool,
+}
 
-    /// Apply any necessary updates to the source of the attack
+impl EffectSource {
+    fn should_apply_effect(&self, target_index: usize) -> bool {
+        !(!self.can_target_source && target_index == self.index)
+    }
+}
+
+impl From<(usize, bool)> for EffectSource {
+    fn from((index, can_target_source): (usize, bool)) -> Self {
+        Self {
+            index,
+            can_target_source,
+        }
+    }
+}
+
+/// Effects that can target other entities of type `E`
+pub trait TargetsOthers<E>: Debug {
+    /// Apply the main effect to a target entity (i.e. do damage, apply status effects, etc.)
+    /// Returns whether or not the effect needs to process on the next tick
+    fn apply_effect(&mut self, target: &mut E) -> ScarabResult<bool>;
+
+    /// Apply any necessary updates to the source of the effect
     /// This could be animation states, draining energy or any other necessary effect
     fn update_src(&mut self, src: &mut E) -> ScarabResult<()>;
 }

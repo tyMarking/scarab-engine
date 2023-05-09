@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-scarab_engine = { path = "../scarab-engine" }
+scarab_engine = { path = "../scarab-engine", features = ["effect-helpers"] }
 piston = "0.53.0"
 piston2d-graphics = "0.42.0"
 pistoncore-glutin_window = "0.70.1"
