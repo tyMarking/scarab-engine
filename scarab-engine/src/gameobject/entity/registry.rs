@@ -7,7 +7,7 @@ use crate::{
     error::RenderResult,
     gameobject::{Entity, Field},
     rendering::registry::TextureRegistry,
-    scene::PendingEffect,
+    scene::{GameTickArgs, PendingEffect},
     Camera, HasUuid, ScarabResult,
 };
 
@@ -53,17 +53,6 @@ where
         texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
     ) -> RenderResult<()>;
-}
-
-#[derive(Debug)]
-/// Various arguments used for running game ticks on entities
-pub struct GameTickArgs<'a, E> {
-    /// The field which the updated entity is on
-    pub field: &'a Field,
-    /// The current attacks waiting to be processed in the game loop. Add to this to attack another entity
-    pub pending_attacks: &'a mut Vec<PendingEffect<E>>,
-    /// The change in time for this update
-    pub dt: f64,
 }
 
 /// The registry of all entities that are active in a scene

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     gameobject::{
-        entity::registry::{EntityRegistry, GameTickArgs, RegisteredEntity},
+        entity::registry::{EntityRegistry, RegisteredEntity},
         field::Field,
         HasSolidity,
     },
@@ -161,6 +161,17 @@ where
 
         Ok(())
     }
+}
+
+#[derive(Debug)]
+/// Various arguments used for running game ticks on entities
+pub struct GameTickArgs<'a, E> {
+    /// The field which the updated entity is on
+    pub field: &'a Field,
+    /// The current attacks waiting to be processed in the game loop. Add to this to attack another entity
+    pub pending_attacks: &'a mut Vec<PendingEffect<E>>,
+    /// The change in time for this update
+    pub dt: f64,
 }
 
 #[derive(Debug)]

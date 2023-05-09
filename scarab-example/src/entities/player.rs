@@ -2,12 +2,12 @@ use scarab_engine::{
     gameobject::{
         entity::{
             effect_helpers::{BasicAttack, Cooldown, TryAction},
-            registry::GameTickArgs,
             HasEntity,
         },
         Entity,
     },
     rendering::sprite::AnimationStates,
+    scene::GameTickArgs,
     HasBox, HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};

@@ -2,6 +2,7 @@ use crate::{
     error::RenderResult,
     gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
     rendering::{registry::TextureRegistry, View},
+    scene::GameTickArgs,
     Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
 };
 
@@ -13,8 +14,6 @@ use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-use self::registry::GameTickArgs;
 
 use super::Field;
 

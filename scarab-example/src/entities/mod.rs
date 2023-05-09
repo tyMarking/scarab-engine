@@ -7,10 +7,7 @@ pub use player::{Player, PlayerAnimations};
 use scarab_engine::{
     error::RenderResult,
     gameobject::{
-        entity::{
-            registry::{GameTickArgs, RegisteredEntity},
-            HasEntity,
-        },
+        entity::{registry::RegisteredEntity, HasEntity},
         Entity,
     },
     rendering::{
@@ -18,6 +15,7 @@ use scarab_engine::{
         sprite::{AnimationStateMachine, StaticAnimation},
         View,
     },
+    scene::GameTickArgs,
     HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};
