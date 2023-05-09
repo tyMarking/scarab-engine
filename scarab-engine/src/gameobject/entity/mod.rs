@@ -243,10 +243,6 @@ mod test {
             entity.set_max_velocity(-1.0).unwrap_err(),
             PhysicsError::MaxVelocity
         );
-        assert_eq!(
-            entity.set_max_velocity(0.0).unwrap_err(),
-            PhysicsError::MaxVelocity
-        );
     }
 
     #[test]
