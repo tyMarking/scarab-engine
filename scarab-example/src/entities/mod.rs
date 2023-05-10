@@ -2,29 +2,47 @@ mod enemy;
 mod player;
 
 pub use enemy::Enemy;
+use graphics::{types::Color, Context};
+use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 pub use player::{Player, PlayerAnimations};
 use scarab_engine::{
     error::RenderResult,
     gameobject::{
-        entity::{registry::RegisteredEntity, HasEntity},
+        entity::{
+            registry::{RegisteredDebugEntity, RegisteredEntity},
+            HasEntity,
+        },
         Entity,
     },
     rendering::{
+        debug::{DebugView, StandardAndDebugView},
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, StaticAnimation},
         View,
     },
     scene::GameTickArgs,
-    HasUuid, ScarabResult,
+    Camera, HasBox, HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::debug::DebugOptions;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ExampleEntities {
-    Player((Player, AnimationStateMachine<PlayerAnimations>)),
-    Enemy((Enemy, AnimationStateMachine<StaticAnimation>)),
+    Player(
+        (
+            Player,
+            StandardAndDebugView<AnimationStateMachine<PlayerAnimations>, EntityDebug>,
+        ),
+    ),
+    Enemy(
+        (
+            Enemy,
+            StandardAndDebugView<AnimationStateMachine<StaticAnimation>, EntityDebug>,
+        ),
+    ),
 }
 
 impl RegisteredEntity for ExampleEntities {
@@ -100,11 +118,81 @@ impl RegisteredEntity for ExampleEntities {
     }
 }
 
+impl RegisteredDebugEntity for ExampleEntities {
+    type DebugOptions = DebugOptions;
+
+    fn render_with_info(
+        &mut self,
+        debug_options: &Self::DebugOptions,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> RenderResult<()> {
+        match self {
+            Self::Player((player, view)) => view.render_with_info(
+                &player.get_entity_mut(),
+                debug_options,
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            ),
+            Self::Enemy((enemy, view)) => view.render_with_info(
+                &enemy.get_entity_mut(),
+                debug_options,
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            ),
+        }
+    }
+}
+
 impl HasUuid for ExampleEntities {
     fn uuid(&self) -> Uuid {
         match self {
             ExampleEntities::Player((player, _view)) => player.uuid(),
             ExampleEntities::Enemy((enemy, _view)) => enemy.uuid(),
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct EntityDebug {
+    pub box_color: Color,
+    pub health_color: Color,
+}
+
+impl DebugView for EntityDebug {
+    type Viewed = Entity;
+    type DebugOptions = DebugOptions;
+
+    fn render_with_info(
+        &mut self,
+        viewed: &Self::Viewed,
+        debug_options: &Self::DebugOptions,
+        _args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        _texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> RenderResult<()> {
+        if debug_options.entity_collision_boxes {
+            if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
+                // solid color box for help debugging collision
+                graphics::rectangle(self.box_color, rect, transform, gl);
+            }
+        }
+
+        if debug_options.entity_health {
+            // todo
+        }
+
+        Ok(())
     }
 }

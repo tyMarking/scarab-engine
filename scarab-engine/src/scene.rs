@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     gameobject::{
-        entity::registry::{EntityRegistry, RegisteredEntity},
+        entity::registry::{EntityRegistry, RegisteredDebugEntity, RegisteredEntity},
         field::Field,
         HasSolidity,
     },
-    rendering::{registry::TextureRegistry, View},
+    rendering::{debug::DebugView, registry::TextureRegistry, View},
     Camera, HasBox, HasBoxMut, PhysBox, ScarabResult,
 };
 
@@ -159,6 +159,46 @@ where
             !keep_effect
         });
 
+        Ok(())
+    }
+}
+
+#[cfg(feature = "debug-rendering")]
+impl<E, V, D> Scene<E, V>
+where
+    E: RegisteredEntity + RegisteredDebugEntity<DebugOptions = D> + Debug + 'static,
+    V: DebugView<Viewed = Field, DebugOptions = D>,
+{
+    /// Renders the scene with additional debug info
+    pub fn render_with_info(
+        &mut self,
+        debug_options: &D,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()> {
+        self.field_view.render_with_info(
+            &mut self.field,
+            debug_options,
+            args,
+            &camera,
+            ctx,
+            texture_registry,
+            gl,
+        )?;
+
+        for registered_entity in &mut self.entity_registry {
+            registered_entity.render_with_info(
+                debug_options,
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            )?;
+        }
         Ok(())
     }
 }

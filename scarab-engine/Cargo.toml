@@ -27,4 +27,5 @@ edition = "2021"
 
 [features]
 default = []
+debug-rendering = []
 effect-helpers = []

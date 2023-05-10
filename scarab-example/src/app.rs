@@ -5,6 +5,8 @@ use opengl_graphics::{GlGraphics, OpenGL};
 use piston::input::{RenderArgs, UpdateArgs};
 use piston::window::WindowSettings;
 use piston::{CloseArgs, EventSettings, Events, Input};
+use scarab_engine::gameobject::entity::registry::RegisteredDebugEntity;
+use scarab_engine::rendering::debug::DebugView;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -17,6 +19,7 @@ use scarab_engine::{
     App, Camera, ScarabError, ScarabResult, Scene,
 };
 
+use crate::debug::DebugOptions;
 use crate::external_serde::EventSettingsDef;
 
 /// A semver-like version of the AppData's save format
@@ -37,6 +40,7 @@ impl<E, V, I> ExampleApp<E, V, I> {
         scene: Scene<E, V>,
         camera: Camera,
         input_registry: I,
+        debug_options: DebugOptions,
         save_name: String,
         event_settings: EventSettings,
         texture_registry: TextureRegistry,
@@ -49,6 +53,7 @@ impl<E, V, I> ExampleApp<E, V, I> {
                 scene,
                 camera,
                 input_registry,
+                debug_options,
                 event_settings,
                 texture_list: (&texture_registry).into(),
             },
@@ -103,9 +108,9 @@ impl<'a, 'e, 's, E, V, I> App<'a, Window> for ExampleApp<E, V, I>
 where
     'a: 's,
     's: 'e,
-    E: RegisteredEntity + Debug + 'static,
+    E: RegisteredEntity + RegisteredDebugEntity<DebugOptions = DebugOptions> + Debug + 'static,
     E: Serialize,
-    V: View<Viewed = Field>,
+    V: View<Viewed = Field> + DebugView<Viewed = Field, DebugOptions = DebugOptions>,
     V: Serialize,
     I: InputRegistry<InputTarget = E::Player<'e, 's>>,
     I: Serialize,
@@ -122,7 +127,14 @@ where
 
             self.data
                 .scene
-                .render(args, &self.data.camera, ctx, &self.texture_registry, gl)
+                .render_with_info(
+                    &self.data.debug_options,
+                    args,
+                    &self.data.camera,
+                    ctx,
+                    &self.texture_registry,
+                    gl,
+                )
                 .unwrap();
             self.data.camera.render_gutters(BLACK, args, ctx, gl);
         });
@@ -175,6 +187,7 @@ pub struct AppData<E, V, I> {
     scene: Scene<E, V>,
     camera: Camera,
     input_registry: I,
+    debug_options: DebugOptions,
     #[serde(with = "EventSettingsDef")]
     event_settings: EventSettings,
     texture_list: TextureList,

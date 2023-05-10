@@ -7,6 +7,9 @@ use crate::{error::RenderResult, Camera};
 
 use self::registry::TextureRegistry;
 
+#[cfg(feature = "debug-rendering")]
+/// Rendering additional debugging info
+pub mod debug;
 /// Rendering registries
 pub mod registry;
 /// Specifically for rendering sprites

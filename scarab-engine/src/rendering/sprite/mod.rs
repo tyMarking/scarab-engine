@@ -63,9 +63,7 @@ impl SpriteView {
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,
     ) -> RenderResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
-            // solid color box for help debugging collision
-            graphics::rectangle([0.0, 1.0, 1.0, 1.0], rect, transform, gl);
+        if let Some((transform, _rect)) = camera.box_renderables(viewed.get_box(), ctx) {
             let scale_factor = camera.points_per_pixel();
             let transform = transform
                 .trans_pos(self.pos * -scale_factor)

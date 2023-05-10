@@ -52,6 +52,24 @@ where
     ) -> RenderResult<()>;
 }
 
+#[cfg(feature = "debug-rendering")]
+/// A registered entity that can be rendered with debug information
+pub trait RegisteredDebugEntity: RegisteredEntity {
+    /// The options controlling which debug info to show
+    type DebugOptions;
+
+    /// Renders the entity with additional debug info
+    fn render_with_info(
+        &mut self,
+        debug_options: &Self::DebugOptions,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> RenderResult<()>;
+}
+
 /// The registry of all entities that are active in a scene
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EntityRegistry<E> {

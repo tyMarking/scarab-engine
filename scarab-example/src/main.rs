@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use debug::{DebugOptions, FieldDebug};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{ButtonState, EventSettings, Key, Window, WindowSettings};
 
@@ -10,6 +11,7 @@ use scarab_engine::{
     },
     input::{ButtonBinding, LogicalDpad, SingleButton, VirtualDpad},
     rendering::{
+        debug::StandardAndDebugView,
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
     },
@@ -17,11 +19,12 @@ use scarab_engine::{
 };
 
 mod app;
+mod debug;
 mod entities;
 mod external_serde;
 mod inputs;
 use app::ExampleApp;
-use entities::{Enemy, ExampleEntities, Player, PlayerAnimations};
+use entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations};
 use inputs::Inputs;
 
 const MS_PER_FRAME: f64 = 1000.0 / 15.0;
@@ -33,7 +36,7 @@ fn main() -> ScarabResult<()> {
         .graphics_api(opengl)
         .exit_on_esc(true)
         .build()
-        .unwrap(); // TODO! log a more readable message before panicing
+        .unwrap(); // TODO! log a more readable message before panicking
     let gl = GlGraphics::new(opengl);
     window
         .ctx
@@ -69,7 +72,10 @@ fn main() -> ScarabResult<()> {
     };
 
     // Put the field and its view in the scene
-    let mut scene = Scene::new(field, field_view);
+    let mut scene = Scene::new(
+        field,
+        StandardAndDebugView::from((field_view, FieldDebug {})),
+    );
 
     // Create a camera with a 100x100 tile view
     let cambox = PhysBox::new([0.0, 0.0, camera_size[0].into(), camera_size[1].into()])?;
@@ -146,9 +152,23 @@ fn main() -> ScarabResult<()> {
 
     let enemy2 = Enemy { entity: r };
 
-    scene.register_entity(ExampleEntities::Player((player, player_view)))?;
-    scene.register_entity(ExampleEntities::Enemy((enemy, enemy_view.clone())))?;
-    scene.register_entity(ExampleEntities::Enemy((enemy2, enemy_view)))?;
+    let entity_debug = EntityDebug {
+        box_color: [0.0, 1.0, 1.0, 1.0],
+        health_color: [1.0, 0.0, 0.0, 1.0],
+    };
+
+    scene.register_entity(ExampleEntities::Player((
+        player,
+        (player_view, entity_debug.clone()).into(),
+    )))?;
+    scene.register_entity(ExampleEntities::Enemy((
+        enemy,
+        (enemy_view.clone(), entity_debug.clone()).into(),
+    )))?;
+    scene.register_entity(ExampleEntities::Enemy((
+        enemy2,
+        (enemy_view, entity_debug).into(),
+    )))?;
 
     // Use WASD inputs (reminder that up is negative y)
     let mut input_registry = Inputs::new();
@@ -180,6 +200,12 @@ fn main() -> ScarabResult<()> {
         scene,
         camera,
         input_registry,
+        DebugOptions {
+            entity_collision_boxes: true,
+            entity_health: true,
+            field_collision_boxes: true,
+            attack_cooldowns: true,
+        },
         save_name,
         event_settings,
         texture_registry,
