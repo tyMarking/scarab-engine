@@ -13,7 +13,7 @@ use scarab_engine::{
             registry::{RegisteredDebugEntity, RegisteredEntity},
             HasEntity,
         },
-        Entity,
+        Entity, HasHealth,
     },
     rendering::{
         debug::{DebugView, StandardAndDebugView},
@@ -182,15 +182,26 @@ impl DebugView for EntityDebug {
         _texture_registry: &TextureRegistry,
         gl: &mut GlGraphics,
     ) -> RenderResult<()> {
-        if debug_options.entity_collision_boxes {
-            if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
-                // solid color box for help debugging collision
+        if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
+            if debug_options.entity_collision_boxes {
                 graphics::rectangle(self.box_color, rect, transform, gl);
             }
-        }
 
-        if debug_options.entity_health {
-            // todo
+            if debug_options.entity_health {
+                let border_size = 1.0;
+                let height_fraction = 0.3;
+
+                let mut health_rect = rect.clone();
+                let max_width = health_rect[2] - 2.0 * border_size;
+                let max_height = health_rect[3] - 2.0 * border_size;
+
+                health_rect[2] = viewed.get_health().fraction() * max_width;
+                health_rect[3] = height_fraction * max_height;
+                health_rect[0] += border_size;
+                health_rect[1] += max_height - health_rect[3];
+
+                graphics::rectangle(self.health_color, health_rect, transform, gl);
+            }
         }
 
         Ok(())

@@ -192,6 +192,16 @@ impl Health {
     pub fn current(&self) -> Scalar {
         self.curr
     }
+
+    /// The maximum health
+    pub fn max(&self) -> Scalar {
+        self.max
+    }
+
+    /// The current health as a fraction of max health
+    pub fn fraction(&self) -> Scalar {
+        self.curr / self.max
+    }
 }
 
 /// A trait for gameobjects that have a health component
