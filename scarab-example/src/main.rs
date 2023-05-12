@@ -25,7 +25,7 @@ mod external_serde;
 mod inputs;
 use app::ExampleApp;
 use entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations};
-use inputs::Inputs;
+use inputs::{AppInputs, GameInputs};
 
 const MS_PER_FRAME: f64 = 1000.0 / 15.0;
 
@@ -171,8 +171,8 @@ fn main() -> ScarabResult<()> {
     )))?;
 
     // Use WASD inputs (reminder that up is negative y)
-    let mut input_registry = Inputs::new();
-    input_registry.bind_movement(
+    let mut game_input_registry = GameInputs::new();
+    game_input_registry.move_binding = Some(
         LogicalDpad::from(VirtualDpad::new(
             SingleButton::Keyboard(Key::D),
             SingleButton::Keyboard(Key::S),
@@ -181,9 +181,27 @@ fn main() -> ScarabResult<()> {
         ))
         .into(),
     );
-    input_registry.bind_attack(ButtonBinding::new(
+    game_input_registry.attack_binding = Some(ButtonBinding::new(
         ButtonState::Press,
         SingleButton::Mouse(piston::MouseButton::Left),
+    ));
+
+    let mut app_input_registry = AppInputs::default();
+    app_input_registry.toggle_debug_entity_collision_boxes = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::Z),
+    ));
+    app_input_registry.toggle_debug_entity_health = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::X),
+    ));
+    app_input_registry.toggle_debug_field_collision_boxes = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::C),
+    ));
+    app_input_registry.toggle_debug_attack_cooldowns = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::V),
     ));
 
     // NOTE: All of the above code is reponsible for initializing the game state
@@ -199,12 +217,13 @@ fn main() -> ScarabResult<()> {
         window,
         scene,
         camera,
-        input_registry,
+        game_input_registry,
+        app_input_registry,
         DebugOptions {
-            entity_collision_boxes: true,
-            entity_health: true,
-            field_collision_boxes: true,
-            attack_cooldowns: true,
+            entity_collision_boxes: false,
+            entity_health: false,
+            field_collision_boxes: false,
+            attack_cooldowns: false,
         },
         save_name,
         event_settings,

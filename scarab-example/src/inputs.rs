@@ -7,24 +7,24 @@ use scarab_engine::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::entities::Player;
+use crate::{debug::DebugOptions, entities::Player};
 
 #[derive(Debug, Serialize, Deserialize)]
-pub enum InputActions {
+pub enum GameInputActions {
     SetPlayerMovement(Velocity),
     Attack,
     Nop,
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Inputs<'a> {
-    move_binding: Option<UnitAxis2dBinding>,
-    attack_binding: Option<ButtonBinding>,
+pub struct GameInputs<'a> {
+    pub move_binding: Option<UnitAxis2dBinding>,
+    pub attack_binding: Option<ButtonBinding>,
     phantom: PhantomData<&'a u8>,
 }
 
-impl<'a> InputRegistry for Inputs<'a> {
-    type InputActions = InputActions;
+impl<'a> InputRegistry for GameInputs<'a> {
+    type InputActions = GameInputActions;
     type InputTarget = Player;
 
     fn do_input_action(
@@ -33,43 +33,44 @@ impl<'a> InputRegistry for Inputs<'a> {
         target: &mut Self::InputTarget,
     ) -> ScarabResult<()> {
         match action {
-            InputActions::SetPlayerMovement(vel) => {
+            GameInputActions::SetPlayerMovement(vel) => {
                 target
                     .entity
                     .set_velocity(vel * target.entity.get_max_velocity());
             }
-            InputActions::Attack => {
+            GameInputActions::Attack => {
                 target.attack();
             }
-            InputActions::Nop => {}
+            GameInputActions::Nop => {}
         }
 
         Ok(())
     }
 
-    fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions> {
+    fn map_input_to_action(&mut self, input: &Input) -> Option<Self::InputActions> {
         self.move_binding
             .as_mut()
-            .map(|binding| binding.maybe_to_action(&input))
+            .map(|binding| binding.maybe_to_action(input))
             .flatten()
-            .map(|velocity| InputActions::SetPlayerMovement(velocity.into()))
+            .map(|velocity| GameInputActions::SetPlayerMovement(velocity.into()))
             .or_else(|| {
                 self.attack_binding
                     .as_mut()
-                    .map(|binding| binding.maybe_to_action(&input))
+                    .map(|binding| binding.maybe_to_action(input))
                     .flatten()
                     .map(|state| {
                         if state {
-                            InputActions::Attack
+                            Some(GameInputActions::Attack)
                         } else {
-                            InputActions::Nop
+                            None
                         }
                     })
+                    .flatten()
             })
     }
 }
 
-impl<'a> Inputs<'a> {
+impl<'a> GameInputs<'a> {
     pub fn new() -> Self {
         Self {
             move_binding: None,
@@ -77,12 +78,106 @@ impl<'a> Inputs<'a> {
             phantom: PhantomData::default(),
         }
     }
+}
 
-    pub fn bind_movement(&mut self, binding: UnitAxis2dBinding) {
-        self.move_binding.replace(binding);
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub enum AppInputActions {
+    ToggleDebugEntityCollisionBoxes,
+    ToggleDebugEntityHealth,
+    ToggleDebugFieldCollisionBoxes,
+    ToggleDebugAttackCooldowns,
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct AppInputs {
+    pub toggle_debug_entity_collision_boxes: Option<ButtonBinding>,
+    pub toggle_debug_entity_health: Option<ButtonBinding>,
+    pub toggle_debug_field_collision_boxes: Option<ButtonBinding>,
+    pub toggle_debug_attack_cooldowns: Option<ButtonBinding>,
+}
+
+impl InputRegistry for AppInputs {
+    type InputActions = AppInputActions;
+    type InputTarget = DebugOptions;
+
+    fn do_input_action(
+        &self,
+        action: Self::InputActions,
+        target: &mut Self::InputTarget,
+    ) -> ScarabResult<()> {
+        match action {
+            AppInputActions::ToggleDebugEntityCollisionBoxes => {
+                target.entity_collision_boxes = !target.entity_collision_boxes;
+            }
+            AppInputActions::ToggleDebugEntityHealth => {
+                target.entity_health = !target.entity_health;
+            }
+            AppInputActions::ToggleDebugFieldCollisionBoxes => {
+                target.field_collision_boxes = !target.field_collision_boxes;
+            }
+            AppInputActions::ToggleDebugAttackCooldowns => {
+                target.attack_cooldowns = !target.attack_cooldowns;
+            }
+        }
+
+        Ok(())
     }
 
-    pub fn bind_attack(&mut self, binding: ButtonBinding) {
-        self.attack_binding.replace(binding);
+    fn map_input_to_action(&mut self, input: &Input) -> Option<Self::InputActions> {
+        self.toggle_debug_entity_collision_boxes
+            .as_mut()
+            .map(|binding| binding.maybe_to_action(input))
+            .flatten()
+            .map(|state| {
+                if state {
+                    Some(AppInputActions::ToggleDebugEntityCollisionBoxes)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .or_else(|| {
+                // TODO! this little Button -> do if pressed would be a good macro
+                self.toggle_debug_entity_health
+                    .as_mut()
+                    .map(|binding| binding.maybe_to_action(input))
+                    .flatten()
+                    .map(|state| {
+                        if state {
+                            Some(AppInputActions::ToggleDebugEntityHealth)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+            })
+            .or_else(|| {
+                self.toggle_debug_field_collision_boxes
+                    .as_mut()
+                    .map(|binding| binding.maybe_to_action(&input))
+                    .flatten()
+                    .map(|state| {
+                        if state {
+                            Some(AppInputActions::ToggleDebugFieldCollisionBoxes)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+            })
+            .or_else(|| {
+                self.toggle_debug_attack_cooldowns
+                    .as_mut()
+                    .map(|binding| binding.maybe_to_action(&input))
+                    .flatten()
+                    .map(|state| {
+                        if state {
+                            Some(AppInputActions::ToggleDebugAttackCooldowns)
+                        } else {
+                            None
+                        }
+                    })
+                    .flatten()
+            })
     }
 }

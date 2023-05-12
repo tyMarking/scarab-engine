@@ -25,7 +25,7 @@ pub trait InputRegistry {
     ) -> ScarabResult<()>;
 
     /// Given an event input (i.e. key press, mouse movement, etc.) turns it into an instance of `InputActions`
-    fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions>;
+    fn map_input_to_action(&mut self, input: &Input) -> Option<Self::InputActions>;
 }
 
 /// Represents a type of input binding and how it is transformed into an action argument

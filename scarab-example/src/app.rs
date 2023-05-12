@@ -25,21 +25,22 @@ use crate::external_serde::EventSettingsDef;
 /// A semver-like version of the AppData's save format
 static SAVE_VERSION: &'static str = "0.1.0";
 
-pub struct ExampleApp<E, V, I> {
+pub struct ExampleApp<E, V, I, J> {
     gl: GlGraphics, // OpenGL drawing backend.
     window: Window,
-    data: AppData<E, V, I>,
+    data: AppData<E, V, I, J>,
     save_name: String,
     texture_registry: TextureRegistry,
 }
 
-impl<E, V, I> ExampleApp<E, V, I> {
+impl<E, V, I, J> ExampleApp<E, V, I, J> {
     pub fn new(
         gl: GlGraphics,
         window: Window,
         scene: Scene<E, V>,
         camera: Camera,
-        input_registry: I,
+        game_input_registry: I,
+        app_input_registry: J,
         debug_options: DebugOptions,
         save_name: String,
         event_settings: EventSettings,
@@ -52,7 +53,8 @@ impl<E, V, I> ExampleApp<E, V, I> {
                 save_version: SAVE_VERSION.to_string(),
                 scene,
                 camera,
-                input_registry,
+                game_input_registry,
+                app_input_registry,
                 debug_options,
                 event_settings,
                 texture_list: (&texture_registry).into(),
@@ -63,7 +65,7 @@ impl<E, V, I> ExampleApp<E, V, I> {
     }
 }
 
-impl<'e, 's, E, V, I> ExampleApp<E, V, I>
+impl<'e, 's, E, V, I, J> ExampleApp<E, V, I, J>
 where
     's: 'e,
     E: RegisteredEntity,
@@ -72,6 +74,8 @@ where
     V: DeserializeOwned,
     I: InputRegistry<InputTarget = E::Player<'e, 's>>,
     I: DeserializeOwned,
+    J: InputRegistry<InputTarget = DebugOptions>,
+    J: DeserializeOwned,
 {
     pub fn load_from_save(opengl: OpenGL, save_name: String) -> ScarabResult<Self> {
         let window: Window = WindowSettings::new("scarab-example", [300, 400])
@@ -81,7 +85,7 @@ where
             .unwrap(); // TODO: don't panic here
 
         let file = File::open(&save_name).map_err(|e| ScarabError::RawString(format!("{:}", e)))?;
-        let app_data: AppData<E, V, I> = rmp_serde::from_read(file)
+        let app_data: AppData<E, V, I, J> = rmp_serde::from_read(file)
             .map_err(|e| ScarabError::RawString(format!("Could not parse file: {:?}", e)))?;
 
         // Lazy version checking requires exact match.
@@ -104,7 +108,7 @@ where
     }
 }
 
-impl<'a, 'e, 's, E, V, I> App<'a, Window> for ExampleApp<E, V, I>
+impl<'a, 'e, 's, E, V, I, J> App<'a, Window> for ExampleApp<E, V, I, J>
 where
     'a: 's,
     's: 'e,
@@ -114,6 +118,8 @@ where
     V: Serialize,
     I: InputRegistry<InputTarget = E::Player<'e, 's>>,
     I: Serialize,
+    J: InputRegistry<InputTarget = DebugOptions>,
+    J: Serialize,
 {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
@@ -169,7 +175,14 @@ where
     }
 
     fn input_event(&mut self, input: Input) {
-        if let Some(action) = self.data.input_registry.map_input_to_action(input) {
+        if let Some(action) = self.data.app_input_registry.map_input_to_action(&input) {
+            let _ = self
+                .data
+                .app_input_registry
+                .do_input_action(action, &mut self.data.debug_options);
+        }
+
+        if let Some(action) = self.data.game_input_registry.map_input_to_action(&input) {
             self.data.do_player_action(action);
         }
     }
@@ -182,18 +195,19 @@ where
 /// All data about an app that should be savable between instances
 /// i.e. scenes, controls, rendering settings
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AppData<E, V, I> {
+pub struct AppData<E, V, I, J> {
     save_version: String,
     scene: Scene<E, V>,
     camera: Camera,
-    input_registry: I,
+    game_input_registry: I,
+    app_input_registry: J,
     debug_options: DebugOptions,
     #[serde(with = "EventSettingsDef")]
     event_settings: EventSettings,
     texture_list: TextureList,
 }
 
-impl<'e, 's, A, E, V, I> AppData<E, V, I>
+impl<'e, 's, A, E, V, I, J> AppData<E, V, I, J>
 where
     's: 'e,
     E: RegisteredEntity + Debug + 'static,
@@ -203,7 +217,7 @@ where
     fn do_player_action(&mut self, action: A) {
         if let Some(player) = self.scene.player_mut() {
             let _ = self
-                .input_registry
+                .game_input_registry
                 .do_input_action(action, player)
                 .map_err(|e| println!("Doing input action failed with error: {e}"));
         } else {
@@ -212,14 +226,14 @@ where
     }
 }
 
-impl<'e, 's, E, V, I> From<ExampleApp<E, V, I>> for AppData<E, V, I>
+impl<'e, 's, E, V, I, J> From<ExampleApp<E, V, I, J>> for AppData<E, V, I, J>
 where
     's: 'e,
     E: RegisteredEntity,
     V: View<Viewed = Field>,
     I: InputRegistry<InputTarget = E::Player<'e, 's>>,
 {
-    fn from(app: ExampleApp<E, V, I>) -> Self {
+    fn from(app: ExampleApp<E, V, I, J>) -> Self {
         let mut data = app.data;
         let new_texture_list = app.texture_registry.into();
         data.texture_list = new_texture_list;
@@ -227,14 +241,14 @@ where
     }
 }
 
-impl<'e, 's, A, E, V, I> From<Box<ExampleApp<E, V, I>>> for AppData<E, V, I>
+impl<'e, 's, A, E, V, I, J> From<Box<ExampleApp<E, V, I, J>>> for AppData<E, V, I, J>
 where
     's: 'e,
     E: RegisteredEntity,
     V: View<Viewed = Field>,
     I: InputRegistry<InputActions = A, InputTarget = E::Player<'e, 's>>,
 {
-    fn from(app: Box<ExampleApp<E, V, I>>) -> Self {
+    fn from(app: Box<ExampleApp<E, V, I, J>>) -> Self {
         app.data
     }
 }
