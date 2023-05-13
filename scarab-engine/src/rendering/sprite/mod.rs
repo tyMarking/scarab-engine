@@ -1,5 +1,5 @@
 /// Rendering sprites attached to a game object
-use core::fmt::Debug;
+use core::{fmt::Debug, marker::PhantomData};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, time::Instant};
 
 use derivative::Derivative;
@@ -234,7 +234,7 @@ impl<S: AnimationStates> AnimationStateMachine<S> {
     }
 }
 
-impl AnimationStateMachine<StaticAnimation> {
+impl<E: HasBox> AnimationStateMachine<StaticAnimation<E>> {
     /// Creates an AnimationStateMachine that always remains on a single animation
     pub fn static_animation(animation: SpriteAnimation) -> Self {
         let mut animations = HashMap::new();
@@ -260,13 +260,24 @@ where
     fn next_state(&self, viewed: &Self::Viewed) -> Option<Self>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[derive(Derivative, Copy, Serialize, Deserialize)]
+#[derivative(Debug, Clone, PartialEq, Eq, Hash)]
 /// A set of animation states that always remains on the same state
-pub struct StaticAnimation;
+pub struct StaticAnimation<E> {
+    #[derivative(Hash = "ignore", PartialEq = "ignore", Eq(bound = ""))]
+    phantom: PhantomData<E>,
+}
 
-impl AnimationStates for StaticAnimation {
-    // TODO! make the implementation generic across Viewed types
-    type Viewed = Entity;
+impl<E> Default for StaticAnimation<E> {
+    fn default() -> Self {
+        Self {
+            phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<E: HasBox> AnimationStates for StaticAnimation<E> {
+    type Viewed = E;
 
     fn next_state(&self, _viewed: &Self::Viewed) -> Option<Self> {
         None

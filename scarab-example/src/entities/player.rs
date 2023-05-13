@@ -1,3 +1,4 @@
+use graphics::types::Color;
 use scarab_engine::{
     gameobject::{
         entity::{
@@ -6,18 +7,21 @@ use scarab_engine::{
         },
         Entity,
     },
-    rendering::sprite::AnimationStates,
+    rendering::{debug::DebugView, sprite::AnimationStates},
     scene::GameTickArgs,
     HasBox, HasUuid, ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
-use super::ExampleEntities;
+use crate::debug::DebugOptions;
+
+use super::{EntityDebug, ExampleEntities};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {
     pub entity: Entity,
+    // TODO! this needs to be a proper struct a tuple is just horrendous
     attack: (TryAction, BasicAttack, f64),
 }
 
@@ -53,14 +57,18 @@ impl Player {
 
         Ok(())
     }
+
+    pub fn cooldown_fraction(&self) -> f64 {
+        f64::from(self.attack.0.cooldown) / self.attack.2
+    }
 }
 
-impl<'a, 'b: 'a> HasEntity<'a, 'b> for Player {
-    fn get_entity(&'b self) -> &'a Entity {
+impl HasEntity for Player {
+    fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    fn get_entity_mut(&'b mut self) -> &'a mut Entity {
+    fn get_entity_mut(&mut self) -> &mut Entity {
         &mut self.entity
     }
 }
@@ -71,6 +79,12 @@ impl HasUuid for Player {
     }
 }
 
+impl HasBox for Player {
+    fn get_box(&self) -> &scarab_engine::PhysBox {
+        self.entity.get_box()
+    }
+}
+
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerAnimations {
     Idle,
@@ -78,10 +92,10 @@ pub enum PlayerAnimations {
 }
 
 impl AnimationStates for PlayerAnimations {
-    type Viewed = Entity;
+    type Viewed = Player;
 
     fn next_state(&self, viewed: &Self::Viewed) -> Option<Self> {
-        let next = if viewed.get_velocity().magnitude_sq() == 0.0 {
+        let next = if viewed.entity.get_velocity().magnitude_sq() == 0.0 {
             Self::Idle
         } else {
             Self::Run
@@ -92,5 +106,68 @@ impl AnimationStates for PlayerAnimations {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlayerDebug {
+    pub entity_debug: EntityDebug<Player>,
+    pub cooldown_color: Color,
+}
+
+impl PlayerDebug {
+    pub fn new(box_color: Color, health_color: Color, cooldown_color: Color) -> Self {
+        Self {
+            entity_debug: EntityDebug::new(box_color, health_color),
+            cooldown_color,
+        }
+    }
+}
+
+impl DebugView for PlayerDebug {
+    type DebugOptions = DebugOptions;
+    type Viewed = Player;
+
+    fn render_with_info(
+        &mut self,
+        viewed: &Self::Viewed,
+        debug_options: &Self::DebugOptions,
+        args: &piston::RenderArgs,
+        camera: &scarab_engine::Camera,
+        ctx: graphics::Context,
+        texture_registry: &scarab_engine::rendering::registry::TextureRegistry,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) -> scarab_engine::error::RenderResult<()> {
+        self.entity_debug.render_with_info(
+            viewed,
+            debug_options,
+            args,
+            camera,
+            ctx,
+            texture_registry,
+            gl,
+        )?;
+
+        if let Some((transform, rect)) = camera.box_renderables(viewed.get_entity().get_box(), ctx)
+        {
+            if debug_options.attack_cooldowns {
+                let border_size = 1.0;
+                let height_fraction = 0.3;
+
+                let mut health_rect = rect.clone();
+                let max_width = health_rect[2] - 2.0 * border_size;
+                let max_height = health_rect[3] - 2.0 * border_size;
+
+                health_rect[2] = viewed.cooldown_fraction() * max_width;
+
+                health_rect[3] = height_fraction * max_height;
+                health_rect[0] += border_size;
+                health_rect[1] += border_size;
+
+                graphics::rectangle(self.cooldown_color, health_rect, transform, gl);
+            }
+        }
+
+        Ok(())
     }
 }

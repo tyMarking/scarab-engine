@@ -4,7 +4,7 @@ use glutin_window::GlutinWindow as Window;
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::input::{RenderArgs, UpdateArgs};
 use piston::window::WindowSettings;
-use piston::{CloseArgs, EventSettings, Events, Input};
+use piston::{CloseArgs, EventSettings, Events, Input, ResizeArgs};
 use scarab_engine::gameobject::entity::registry::RegisteredDebugEntity;
 use scarab_engine::rendering::debug::DebugView;
 use serde::de::DeserializeOwned;
@@ -25,15 +25,15 @@ use crate::external_serde::EventSettingsDef;
 /// A semver-like version of the AppData's save format
 static SAVE_VERSION: &'static str = "0.1.0";
 
-pub struct ExampleApp<E, V, I, J> {
+pub struct ExampleApp<E, V, I, J, D> {
     gl: GlGraphics, // OpenGL drawing backend.
     window: Window,
-    data: AppData<E, V, I, J>,
+    data: AppData<E, V, I, J, D>,
     save_name: String,
     texture_registry: TextureRegistry,
 }
 
-impl<E, V, I, J> ExampleApp<E, V, I, J> {
+impl<E, V, I, J, D> ExampleApp<E, V, I, J, D> {
     pub fn new(
         gl: GlGraphics,
         window: Window,
@@ -41,7 +41,7 @@ impl<E, V, I, J> ExampleApp<E, V, I, J> {
         camera: Camera,
         game_input_registry: I,
         app_input_registry: J,
-        debug_options: DebugOptions,
+        debug_options: D,
         save_name: String,
         event_settings: EventSettings,
         texture_registry: TextureRegistry,
@@ -65,17 +65,17 @@ impl<E, V, I, J> ExampleApp<E, V, I, J> {
     }
 }
 
-impl<'e, 's, E, V, I, J> ExampleApp<E, V, I, J>
+impl<E, V, I, J, D> ExampleApp<E, V, I, J, D>
 where
-    's: 'e,
     E: RegisteredEntity,
     E: DeserializeOwned,
     V: View<Viewed = Field>,
     V: DeserializeOwned,
-    I: InputRegistry<InputTarget = E::Player<'e, 's>>,
+    I: InputRegistry<InputTarget = E::Player>,
     I: DeserializeOwned,
     J: InputRegistry<InputTarget = DebugOptions>,
     J: DeserializeOwned,
+    D: DeserializeOwned,
 {
     pub fn load_from_save(opengl: OpenGL, save_name: String) -> ScarabResult<Self> {
         let window: Window = WindowSettings::new("scarab-example", [300, 400])
@@ -85,7 +85,7 @@ where
             .unwrap(); // TODO: don't panic here
 
         let file = File::open(&save_name).map_err(|e| ScarabError::RawString(format!("{:}", e)))?;
-        let app_data: AppData<E, V, I, J> = rmp_serde::from_read(file)
+        let app_data: AppData<E, V, I, J, D> = rmp_serde::from_read(file)
             .map_err(|e| ScarabError::RawString(format!("Could not parse file: {:?}", e)))?;
 
         // Lazy version checking requires exact match.
@@ -108,18 +108,17 @@ where
     }
 }
 
-impl<'a, 'e, 's, E, V, I, J> App<'a, Window> for ExampleApp<E, V, I, J>
+impl<E, V, I, J, D> App<Window> for ExampleApp<E, V, I, J, D>
 where
-    'a: 's,
-    's: 'e,
-    E: RegisteredEntity + RegisteredDebugEntity<DebugOptions = DebugOptions> + Debug + 'static,
+    E: RegisteredEntity + RegisteredDebugEntity<DebugOptions = D> + Debug,
     E: Serialize,
-    V: View<Viewed = Field> + DebugView<Viewed = Field, DebugOptions = DebugOptions>,
+    V: View<Viewed = Field> + DebugView<Viewed = Field, DebugOptions = D>,
     V: Serialize,
-    I: InputRegistry<InputTarget = E::Player<'e, 's>>,
+    I: InputRegistry<InputTarget = E::Player>,
     I: Serialize,
-    J: InputRegistry<InputTarget = DebugOptions>,
+    J: InputRegistry<InputTarget = D>,
     J: Serialize,
+    D: Serialize,
 {
     fn render(&mut self, args: &RenderArgs) {
         use graphics::*;
@@ -154,7 +153,7 @@ where
             .map_err(|e| println!("Ticking entities failed with error: {e:}"));
     }
 
-    fn resize(&mut self, args: &piston::ResizeArgs) {
+    fn resize(&mut self, args: &ResizeArgs) {
         self.data.camera.set_window_size(&args.window_size)
     }
 
@@ -195,24 +194,23 @@ where
 /// All data about an app that should be savable between instances
 /// i.e. scenes, controls, rendering settings
 #[derive(Debug, Serialize, Deserialize)]
-pub struct AppData<E, V, I, J> {
+pub struct AppData<E, V, I, J, D> {
     save_version: String,
     scene: Scene<E, V>,
     camera: Camera,
     game_input_registry: I,
     app_input_registry: J,
-    debug_options: DebugOptions,
+    debug_options: D,
     #[serde(with = "EventSettingsDef")]
     event_settings: EventSettings,
     texture_list: TextureList,
 }
 
-impl<'e, 's, A, E, V, I, J> AppData<E, V, I, J>
+impl<A, E, V, I, J, D> AppData<E, V, I, J, D>
 where
-    's: 'e,
-    E: RegisteredEntity + Debug + 'static,
+    E: RegisteredEntity + Debug,
     V: View<Viewed = Field>,
-    I: InputRegistry<InputActions = A, InputTarget = E::Player<'e, 's>>,
+    I: InputRegistry<InputActions = A, InputTarget = E::Player>,
 {
     fn do_player_action(&mut self, action: A) {
         if let Some(player) = self.scene.player_mut() {
@@ -226,14 +224,13 @@ where
     }
 }
 
-impl<'e, 's, E, V, I, J> From<ExampleApp<E, V, I, J>> for AppData<E, V, I, J>
+impl<E, V, I, J, D> From<ExampleApp<E, V, I, J, D>> for AppData<E, V, I, J, D>
 where
-    's: 'e,
     E: RegisteredEntity,
     V: View<Viewed = Field>,
-    I: InputRegistry<InputTarget = E::Player<'e, 's>>,
+    I: InputRegistry<InputTarget = E::Player>,
 {
-    fn from(app: ExampleApp<E, V, I, J>) -> Self {
+    fn from(app: ExampleApp<E, V, I, J, D>) -> Self {
         let mut data = app.data;
         let new_texture_list = app.texture_registry.into();
         data.texture_list = new_texture_list;
@@ -241,14 +238,13 @@ where
     }
 }
 
-impl<'e, 's, A, E, V, I, J> From<Box<ExampleApp<E, V, I, J>>> for AppData<E, V, I, J>
+impl<A, E, V, I, J, D> From<Box<ExampleApp<E, V, I, J, D>>> for AppData<E, V, I, J, D>
 where
-    's: 'e,
     E: RegisteredEntity,
     V: View<Viewed = Field>,
-    I: InputRegistry<InputActions = A, InputTarget = E::Player<'e, 's>>,
+    I: InputRegistry<InputActions = A, InputTarget = E::Player>,
 {
-    fn from(app: Box<ExampleApp<E, V, I, J>>) -> Self {
+    fn from(app: Box<ExampleApp<E, V, I, J, D>>) -> Self {
         app.data
     }
 }

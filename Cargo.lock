@@ -1515,6 +1515,7 @@ dependencies = [
 name = "scarab-example"
 version = "0.1.0"
 dependencies = [
+ "derivative",
  "piston",
  "piston2d-graphics 0.42.0",
  "piston2d-opengl_graphics",

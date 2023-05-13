@@ -12,7 +12,7 @@ pub struct DebugOptions {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct FieldDebug {}
 
-impl DebugView for FieldDebug {
+impl<'a> DebugView for FieldDebug {
     type DebugOptions = DebugOptions;
     type Viewed = Field;
 

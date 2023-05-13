@@ -24,12 +24,12 @@ pub mod effect_helpers;
 pub mod registry;
 
 /// A trait for game objects that wrap/own an entity
-pub trait HasEntity<'e, 's: 'e> {
+pub trait HasEntity {
     /// Returns a reference to the game object's inner entity
-    fn get_entity(&'s self) -> &'e Entity;
+    fn get_entity(&self) -> &Entity;
 
     /// Returns a mutable reference to the game object's inner entity
-    fn get_entity_mut(&'s mut self) -> &'e mut Entity;
+    fn get_entity_mut(&mut self) -> &mut Entity;
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -24,7 +24,7 @@ mod entities;
 mod external_serde;
 mod inputs;
 use app::ExampleApp;
-use entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations};
+use entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations, PlayerDebug};
 use inputs::{AppInputs, GameInputs};
 
 const MS_PER_FRAME: f64 = 1000.0 / 15.0;
@@ -152,22 +152,24 @@ fn main() -> ScarabResult<()> {
 
     let enemy2 = Enemy { entity: r };
 
-    let entity_debug = EntityDebug {
-        box_color: [0.0, 1.0, 1.0, 1.0],
-        health_color: [1.0, 0.0, 0.0, 1.0],
-    };
+    let box_color = [0.0, 1.0, 1.0, 1.0];
+    let health_color = [1.0, 0.0, 0.0, 1.0];
+    let cooldown_color = [0.0, 0.0, 1.0, 1.0];
+
+    let player_debug = PlayerDebug::new(box_color, health_color, cooldown_color);
+    let enemy_debug = EntityDebug::new(box_color, health_color);
 
     scene.register_entity(ExampleEntities::Player((
         player,
-        (player_view, entity_debug.clone()).into(),
+        (player_view, player_debug).into(),
     )))?;
     scene.register_entity(ExampleEntities::Enemy((
         enemy,
-        (enemy_view.clone(), entity_debug.clone()).into(),
+        (enemy_view.clone(), enemy_debug.clone()).into(),
     )))?;
     scene.register_entity(ExampleEntities::Enemy((
         enemy2,
-        (enemy_view, entity_debug).into(),
+        (enemy_view, enemy_debug).into(),
     )))?;
 
     // Use WASD inputs (reminder that up is negative y)

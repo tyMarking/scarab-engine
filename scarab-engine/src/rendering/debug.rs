@@ -1,3 +1,5 @@
+use core::marker::PhantomData;
+
 use graphics::Context;
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
@@ -34,7 +36,7 @@ pub struct StandardAndDebugView<V, D> {
     debug_view: D,
 }
 
-impl<V, D> From<(V, D)> for StandardAndDebugView<V, D> {
+impl<'a, V, D> From<(V, D)> for StandardAndDebugView<V, D> {
     fn from((standard_view, debug_view): (V, D)) -> Self {
         Self {
             standard_view,

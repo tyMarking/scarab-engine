@@ -4,7 +4,7 @@ use piston::{
 };
 
 /// A trait to simplify some of the boilerplate in running an app
-pub trait App<'a, W: Window> {
+pub trait App<W: Window> {
     /// Responsible for things like saving app data
     fn close(self: Box<Self>, args: &CloseArgs);
 

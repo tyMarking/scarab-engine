@@ -34,6 +34,15 @@ impl Cooldown {
     }
 }
 
+impl From<Cooldown> for f64 {
+    fn from(value: Cooldown) -> Self {
+        match value {
+            Cooldown::Ready => 0.0,
+            Cooldown::Cooling(x) => x,
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Default)]
 /// Controls how an entity uses a specific action
 pub struct TryAction {
