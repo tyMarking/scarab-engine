@@ -1,36 +1,42 @@
-mod enemy;
-mod player;
-
 use core::marker::PhantomData;
-use derivative::Derivative;
 
-pub use enemy::Enemy;
+use derivative::Derivative;
 use graphics::{types::Color, Context};
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
-pub use player::{Player, PlayerAnimations, PlayerDebug};
 use scarab_engine::{
     error::RenderResult,
     gameobject::{
         entity::{
             registry::{RegisteredDebugEntity, RegisteredEntity},
-            HasEntity,
+            Entity, HasEntity,
         },
-        Entity, HasHealth,
+        HasHealth,
     },
     rendering::{
         debug::{DebugView, StandardAndDebugView},
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, StaticAnimation},
-        View,
+        Camera, View,
     },
     scene::GameTickArgs,
-    Camera, HasBox, HasUuid, ScarabResult,
+    types::{
+        physbox::{HasBox, PhysBox},
+        HasUuid,
+    },
+    ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub use self::{
+    enemy::Enemy,
+    player::{Player, PlayerAnimations, PlayerDebug},
+};
 use crate::debug::DebugOptions;
+
+mod enemy;
+mod player;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ExampleEntities {
@@ -49,7 +55,7 @@ pub enum ExampleEntities {
 }
 
 impl HasBox for ExampleEntities {
-    fn get_box(&self) -> &scarab_engine::PhysBox {
+    fn get_box(&self) -> &PhysBox {
         match self {
             ExampleEntities::Player((player, _)) => player.get_entity().get_box(),
             ExampleEntities::Enemy((enemy, _)) => enemy.get_entity().get_box(),
@@ -77,7 +83,7 @@ impl RegisteredEntity for ExampleEntities {
     fn render(
         &mut self,
         args: &RenderArgs,
-        camera: &scarab_engine::Camera,
+        camera: &Camera,
         ctx: graphics::Context,
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,

@@ -1,11 +1,3 @@
-use crate::{
-    error::RenderResult,
-    gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
-    rendering::{registry::TextureRegistry, View},
-    scene::GameTickArgs,
-    Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
-};
-
 use graphics::{
     types::{Color, Scalar},
     Context,
@@ -15,7 +7,20 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Field;
+use super::{
+    field::{Cell, Field},
+    HasHealth, HasSolidity, Health, Solidity, SOLID,
+};
+use crate::{
+    error::RenderResult,
+    rendering::{registry::TextureRegistry, Camera, View},
+    scene::GameTickArgs,
+    types::{
+        physbox::{HasBox, HasBoxMut, PhysBox},
+        Velocity,
+    },
+    PhysicsError, PhysicsResult, ScarabResult,
+};
 
 /// Helper structs for applying basic effects and attacks to entities
 #[cfg(feature = "effect-helpers")]

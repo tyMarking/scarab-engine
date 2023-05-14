@@ -3,19 +3,31 @@ use std::collections::HashMap;
 use debug::{DebugOptions, FieldDebug};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{ButtonState, EventSettings, Key, Window, WindowSettings};
-
 use scarab_engine::{
     gameobject::{
+        entity::Entity,
         field::{Cell, CellColorView, Field, FieldColorView},
-        Entity, NO_SOLIDITY, SOLID,
+        NO_SOLIDITY, SOLID,
     },
     input::{ButtonBinding, LogicalDpad, SingleButton, VirtualDpad},
     rendering::{
         debug::StandardAndDebugView,
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
+        Camera,
     },
-    App, Axis, Camera, GlutinWindow, HasBoxMut, LogicalSize, PhysBox, ScarabResult, Scene,
+    scene::Scene,
+    types::{
+        physbox::{HasBoxMut, PhysBox},
+        Axis,
+    },
+    App, GlutinWindow, LogicalSize, ScarabResult,
+};
+
+use self::{
+    app::ExampleApp,
+    entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations, PlayerDebug},
+    inputs::{AppInputs, GameInputs},
 };
 
 mod app;
@@ -23,9 +35,6 @@ mod debug;
 mod entities;
 mod external_serde;
 mod inputs;
-use app::ExampleApp;
-use entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations, PlayerDebug};
-use inputs::{AppInputs, GameInputs};
 
 const MS_PER_FRAME: f64 = 1000.0 / 15.0;
 

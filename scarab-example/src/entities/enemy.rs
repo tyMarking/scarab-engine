@@ -1,6 +1,9 @@
 use scarab_engine::{
-    gameobject::{entity::HasEntity, Entity},
-    HasBox, HasUuid,
+    gameobject::entity::{Entity, HasEntity},
+    types::{
+        physbox::{HasBox, PhysBox},
+        HasUuid,
+    },
 };
 use serde::{Deserialize, Serialize};
 
@@ -10,7 +13,7 @@ pub struct Enemy {
 }
 
 impl HasBox for Enemy {
-    fn get_box(&self) -> &scarab_engine::PhysBox {
+    fn get_box(&self) -> &PhysBox {
         self.entity.get_box()
     }
 }

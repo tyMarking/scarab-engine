@@ -8,15 +8,13 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
+use self::sprite_serde::ImageDef;
+use super::{registry::TextureRegistry, Camera, View};
 use crate::{
     error::{AnimationError, RenderError, RenderResult},
-    gameobject::Entity,
-    Axis, Camera, HasBox, ScarabResult,
+    types::{physbox::HasBox, Axis},
+    ScarabResult,
 };
-
-use self::sprite_serde::ImageDef;
-
-use super::{registry::TextureRegistry, View};
 
 mod sprite_serde;
 

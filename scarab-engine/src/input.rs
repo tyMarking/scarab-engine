@@ -4,7 +4,7 @@ use piston::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{ScarabResult, ROOT_2};
+use crate::{types::ROOT_2, ScarabResult};
 
 /// A trait for types that handle user inputs.
 /// User input handling is split into two stages: mapping input to action and performing the action

@@ -11,8 +11,9 @@ use crate::{
         field::Field,
         HasSolidity,
     },
-    rendering::{debug::DebugView, registry::TextureRegistry, View},
-    Camera, HasBox, HasBoxMut, PhysBox, ScarabResult,
+    rendering::{debug::DebugView, registry::TextureRegistry, Camera, View},
+    types::physbox::{HasBox, HasBoxMut, PhysBox},
+    ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]

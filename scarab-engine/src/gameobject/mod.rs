@@ -1,17 +1,15 @@
+use core::ops::{BitAnd, BitOr, Not};
+
+use graphics::types::Scalar;
+use serde::{Deserialize, Serialize};
+
 /// All moving/kinetic objects in a game scene
 pub mod entity;
 
 /// The setting of a game scene, determines static obstables
 pub mod field;
 
-use core::ops::{BitAnd, BitOr, Not};
-
-pub use entity::Entity;
-pub use field::{Cell, Field};
-use graphics::types::Scalar;
-use serde::{Deserialize, Serialize};
-
-use crate::BoxEdge;
+use crate::types::BoxEdge;
 
 /// Represents whether the typical entity can enter/exit a cell from each side
 ///

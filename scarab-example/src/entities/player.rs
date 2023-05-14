@@ -1,22 +1,22 @@
 use graphics::types::Color;
 use scarab_engine::{
-    gameobject::{
-        entity::{
-            effect_helpers::{BasicAttack, Cooldown, TryAction},
-            HasEntity,
-        },
-        Entity,
+    gameobject::entity::{
+        effect_helpers::{BasicAttack, Cooldown, TryAction},
+        Entity, HasEntity,
     },
-    rendering::{debug::DebugView, sprite::AnimationStates},
+    rendering::{debug::DebugView, sprite::AnimationStates, Camera},
     scene::GameTickArgs,
-    HasBox, HasUuid, ScarabResult,
+    types::{
+        physbox::{HasBox, PhysBox},
+        HasUuid,
+    },
+    ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
-use crate::debug::DebugOptions;
-
 use super::{EntityDebug, ExampleEntities};
+use crate::debug::DebugOptions;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {
@@ -80,7 +80,7 @@ impl HasUuid for Player {
 }
 
 impl HasBox for Player {
-    fn get_box(&self) -> &scarab_engine::PhysBox {
+    fn get_box(&self) -> &PhysBox {
         self.entity.get_box()
     }
 }
@@ -133,7 +133,7 @@ impl DebugView for PlayerDebug {
         viewed: &Self::Viewed,
         debug_options: &Self::DebugOptions,
         args: &piston::RenderArgs,
-        camera: &scarab_engine::Camera,
+        camera: &Camera,
         ctx: graphics::Context,
         texture_registry: &scarab_engine::rendering::registry::TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,

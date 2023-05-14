@@ -3,7 +3,8 @@ use core::marker::PhantomData;
 use piston::Input;
 use scarab_engine::{
     input::{ButtonBinding, InputBinding, InputRegistry, UnitAxis2dBinding},
-    ScarabResult, Velocity,
+    types::Velocity,
+    ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 

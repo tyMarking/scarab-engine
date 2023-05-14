@@ -4,12 +4,10 @@ use graphics::types::{Scalar, Vec2d};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
+use uuid::Uuid;
 
 /// Stuff for rectangular physics items
 pub mod physbox;
-
-pub use physbox::*;
-use uuid::Uuid;
 
 lazy_static! {
     /// Pre-calculate the square root of 2

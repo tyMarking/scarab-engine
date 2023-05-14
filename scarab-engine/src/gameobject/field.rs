@@ -1,20 +1,23 @@
 use core::slice::Iter;
+use std::fmt::Debug;
+
 use graphics::{types::Color, Context};
 use opengl_graphics::GlGraphics;
 use petgraph::{graph::NodeIndex, prelude::DiGraph, stable_graph::DefaultIx, visit::EdgeRef};
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::Point;
-use std::fmt::Debug;
 
+use super::{HasSolidity, Solidity, NO_SOLIDITY, SOLID};
 use crate::{
     error::RenderResult,
-    gameobject::Solidity,
-    rendering::{registry::TextureRegistry, View},
-    BoxEdge, Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult,
+    rendering::{registry::TextureRegistry, Camera, View},
+    types::{
+        physbox::{HasBox, HasBoxMut, PhysBox},
+        BoxEdge,
+    },
+    PhysicsError, PhysicsResult,
 };
-
-use super::{HasSolidity, NO_SOLIDITY, SOLID};
 
 /// A graph of `Cell`s on the field, with the edges between them being the
 /// physical side of the cell where the edge appears, and whether or not

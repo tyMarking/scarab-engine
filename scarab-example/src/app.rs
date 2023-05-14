@@ -5,22 +5,24 @@ use opengl_graphics::{GlGraphics, OpenGL};
 use piston::input::{RenderArgs, UpdateArgs};
 use piston::window::WindowSettings;
 use piston::{CloseArgs, EventSettings, Events, Input, ResizeArgs};
-use scarab_engine::gameobject::entity::registry::RegisteredDebugEntity;
-use scarab_engine::rendering::debug::DebugView;
+use scarab_engine::{
+    gameobject::{
+        entity::registry::{RegisteredDebugEntity, RegisteredEntity},
+        field::Field,
+    },
+    input::InputRegistry,
+    rendering::{
+        debug::DebugView,
+        registry::{TextureList, TextureRegistry},
+        Camera, View,
+    },
+    scene::Scene,
+    App, ScarabError, ScarabResult,
+};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use scarab_engine::{
-    gameobject::entity::registry::RegisteredEntity,
-    gameobject::Field,
-    input::InputRegistry,
-    rendering::registry::{TextureList, TextureRegistry},
-    rendering::View,
-    App, Camera, ScarabError, ScarabResult, Scene,
-};
-
-use crate::debug::DebugOptions;
-use crate::external_serde::EventSettingsDef;
+use crate::{debug::DebugOptions, external_serde::EventSettingsDef};
 
 /// A semver-like version of the AppData's save format
 static SAVE_VERSION: &'static str = "0.1.0";

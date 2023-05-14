@@ -3,12 +3,14 @@ use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
+use super::{Entity, HasEntity};
 use crate::{
-    error::RenderResult, gameobject::Entity, rendering::registry::TextureRegistry,
-    scene::GameTickArgs, Camera, HasUuid, ScarabResult,
+    error::RenderResult,
+    rendering::{registry::TextureRegistry, Camera},
+    scene::GameTickArgs,
+    types::HasUuid,
+    ScarabResult,
 };
-
-use super::HasEntity;
 
 // TODO: Eventually meant to be a trait that can be derived for enums whose
 // variants impl HasEntity

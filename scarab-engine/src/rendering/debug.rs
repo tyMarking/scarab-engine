@@ -1,13 +1,10 @@
-use core::marker::PhantomData;
-
 use graphics::Context;
 use opengl_graphics::GlGraphics;
 use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 
-use crate::{error::RenderResult, Camera};
-
-use super::{registry::TextureRegistry, View};
+use super::{registry::TextureRegistry, Camera, View};
+use crate::error::RenderResult;
 
 /// Renders a game object with extra debugging information depending on the given "DebugOptions"
 pub trait DebugView {

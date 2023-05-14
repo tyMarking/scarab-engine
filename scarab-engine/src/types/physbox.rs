@@ -2,8 +2,8 @@ use graphics::types::{Scalar, Vec2d};
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
-use super::BoxEdge;
-use crate::{Axis, PhysicsError, PhysicsResult};
+use super::{Axis, BoxEdge};
+use crate::{PhysicsError, PhysicsResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 /// A rectangular physics object
@@ -153,7 +153,7 @@ impl PhysBox {
     /// Moves `self` so it does not overlap with `other`.
     /// Does nothing if they already don't overlap.
     /// ```
-    /// use scarab_engine::PhysBox;
+    /// use scarab_engine::types::physbox::PhysBox;
     ///
     /// let box1 = PhysBox::new([0.0, 0.0, 5.0, 5.0].into()).unwrap();
     /// let mut box2 = PhysBox::new([2.0, 4.0, 5.0, 5.0].into()).unwrap();
@@ -215,7 +215,7 @@ impl PhysBox {
     /// For clarity this uses < and > not <= and >=, i.e. two cells that share
     /// an edge do not overlap.
     /// ```
-    /// use scarab_engine::PhysBox;
+    /// use scarab_engine::types::physbox::PhysBox;
     ///
     /// let box1 = PhysBox::new([0.0, 0.0, 5.0, 5.0].into()).unwrap();
     /// let mut box2 = PhysBox::new([3.0, 3.0, 5.0, 5.0].into()).unwrap();

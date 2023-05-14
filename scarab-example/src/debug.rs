@@ -1,4 +1,7 @@
-use scarab_engine::{gameobject::Field, rendering::debug::DebugView};
+use scarab_engine::{
+    gameobject::field::Field,
+    rendering::{debug::DebugView, Camera},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -21,7 +24,7 @@ impl<'a> DebugView for FieldDebug {
         _viewed: &Self::Viewed,
         _debug_options: &Self::DebugOptions,
         _args: &piston::RenderArgs,
-        _camera: &scarab_engine::Camera,
+        _camera: &Camera,
         _ctx: graphics::Context,
         _texture_registry: &scarab_engine::rendering::registry::TextureRegistry,
         _gl: &mut opengl_graphics::GlGraphics,
