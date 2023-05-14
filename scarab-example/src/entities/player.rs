@@ -4,7 +4,12 @@ use scarab_engine::{
         effect_helpers::{BasicAttack, Cooldown, TryAction},
         Entity, HasEntity,
     },
-    rendering::{debug::DebugView, sprite::AnimationStates, Camera},
+    rendering::{
+        components::progress_bar::{inset_left_to_right, InsetPosition},
+        debug::DebugView,
+        sprite::AnimationStates,
+        Camera,
+    },
     scene::GameTickArgs,
     types::{
         physbox::{HasBox, PhysBox},
@@ -151,20 +156,18 @@ impl DebugView for PlayerDebug {
         if let Some((transform, rect)) = camera.box_renderables(viewed.get_entity().get_box(), ctx)
         {
             if debug_options.attack_cooldowns {
-                let border_size = 1.0;
-                let height_fraction = 0.3;
-
-                let mut health_rect = rect.clone();
-                let max_width = health_rect[2] - 2.0 * border_size;
-                let max_height = health_rect[3] - 2.0 * border_size;
-
-                health_rect[2] = viewed.cooldown_fraction() * max_width;
-
-                health_rect[3] = height_fraction * max_height;
-                health_rect[0] += border_size;
-                health_rect[1] += border_size;
-
-                graphics::rectangle(self.cooldown_color, health_rect, transform, gl);
+                graphics::rectangle(
+                    self.cooldown_color,
+                    inset_left_to_right(
+                        &rect,
+                        1.0,
+                        0.3,
+                        viewed.cooldown_fraction(),
+                        InsetPosition::Normal(0.0),
+                    ),
+                    transform,
+                    gl,
+                );
             }
         }
 

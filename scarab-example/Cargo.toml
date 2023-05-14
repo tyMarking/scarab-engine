@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 derivative = "2.2"
 scarab_engine = { path = "../scarab-engine", features = [
+    "component-rendering",
     "debug-rendering",
     "effect-helpers",
 ] }

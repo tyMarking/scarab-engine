@@ -11,6 +11,9 @@ use shapes::Point;
 use self::registry::TextureRegistry;
 use crate::{error::RenderResult, types::physbox::PhysBox};
 
+#[cfg(feature = "component-rendering")]
+/// For rendering generic reusable components
+pub mod components;
 #[cfg(feature = "debug-rendering")]
 /// Rendering additional debugging info
 pub mod debug;

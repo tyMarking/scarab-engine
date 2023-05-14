@@ -14,6 +14,7 @@ use scarab_engine::{
         HasHealth,
     },
     rendering::{
+        components::progress_bar::{inset_left_to_right, InsetPosition},
         debug::{DebugView, StandardAndDebugView},
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, StaticAnimation},
@@ -222,7 +223,18 @@ where
                 health_rect[0] += border_size;
                 health_rect[1] += max_height - health_rect[3];
 
-                graphics::rectangle(self.health_color, health_rect, transform, gl);
+                graphics::rectangle(
+                    self.health_color,
+                    inset_left_to_right(
+                        &rect,
+                        1.0,
+                        0.3,
+                        viewed.get_entity().get_health().fraction(),
+                        InsetPosition::Inverse(0.0),
+                    ),
+                    transform,
+                    gl,
+                );
             }
         }
 
