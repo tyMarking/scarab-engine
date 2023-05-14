@@ -4,7 +4,7 @@ use piston::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{ScarabResult, ROOT_2};
+use crate::{types::ROOT_2, ScarabResult};
 
 /// A trait for types that handle user inputs.
 /// User input handling is split into two stages: mapping input to action and performing the action
@@ -25,7 +25,7 @@ pub trait InputRegistry {
     ) -> ScarabResult<()>;
 
     /// Given an event input (i.e. key press, mouse movement, etc.) turns it into an instance of `InputActions`
-    fn map_input_to_action(&mut self, input: Input) -> Option<Self::InputActions>;
+    fn map_input_to_action(&mut self, input: &Input) -> Option<Self::InputActions>;
 }
 
 /// Represents a type of input binding and how it is transformed into an action argument

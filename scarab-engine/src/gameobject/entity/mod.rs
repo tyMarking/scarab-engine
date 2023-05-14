@@ -1,11 +1,3 @@
-use crate::{
-    error::RenderResult,
-    gameobject::{field::Cell, HasHealth, HasSolidity, Health, Solidity, SOLID},
-    rendering::{registry::TextureRegistry, View},
-    scene::GameTickArgs,
-    Camera, HasBox, HasBoxMut, PhysBox, PhysicsError, PhysicsResult, ScarabResult, Velocity,
-};
-
 use graphics::{
     types::{Color, Scalar},
     Context,
@@ -15,7 +7,20 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Field;
+use super::{
+    field::{Cell, Field},
+    HasHealth, HasSolidity, Health, Solidity, SOLID,
+};
+use crate::{
+    error::RenderResult,
+    rendering::{registry::TextureRegistry, Camera, View},
+    scene::GameTickArgs,
+    types::{
+        physbox::{HasBox, HasBoxMut, PhysBox},
+        Velocity,
+    },
+    PhysicsError, PhysicsResult, ScarabResult,
+};
 
 /// Helper structs for applying basic effects and attacks to entities
 #[cfg(feature = "effect-helpers")]
@@ -24,12 +29,12 @@ pub mod effect_helpers;
 pub mod registry;
 
 /// A trait for game objects that wrap/own an entity
-pub trait HasEntity<'e, 's: 'e> {
+pub trait HasEntity {
     /// Returns a reference to the game object's inner entity
-    fn get_entity(&'s self) -> &'e Entity;
+    fn get_entity(&self) -> &Entity;
 
     /// Returns a mutable reference to the game object's inner entity
-    fn get_entity_mut(&'s mut self) -> &'e mut Entity;
+    fn get_entity_mut(&mut self) -> &mut Entity;
 }
 
 #[derive(Debug, Serialize, Deserialize)]

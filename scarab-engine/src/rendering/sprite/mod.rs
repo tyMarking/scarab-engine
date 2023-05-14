@@ -1,5 +1,5 @@
 /// Rendering sprites attached to a game object
-use core::fmt::Debug;
+use core::{fmt::Debug, marker::PhantomData};
 use std::{collections::HashMap, hash::Hash, path::PathBuf, time::Instant};
 
 use derivative::Derivative;
@@ -8,15 +8,13 @@ use piston::RenderArgs;
 use serde::{Deserialize, Serialize};
 use shapes::{Point, Size};
 
+use self::sprite_serde::ImageDef;
+use super::{registry::TextureRegistry, Camera, View};
 use crate::{
     error::{AnimationError, RenderError, RenderResult},
-    gameobject::Entity,
-    Axis, Camera, HasBox, ScarabResult,
+    types::{physbox::HasBox, Axis},
+    ScarabResult,
 };
-
-use self::sprite_serde::ImageDef;
-
-use super::{registry::TextureRegistry, View};
 
 mod sprite_serde;
 
@@ -63,9 +61,7 @@ impl SpriteView {
         texture_registry: &TextureRegistry,
         gl: &mut opengl_graphics::GlGraphics,
     ) -> RenderResult<()> {
-        if let Some((transform, rect)) = camera.box_renderables(viewed.get_box(), ctx) {
-            // solid color box for help debugging collision
-            graphics::rectangle([0.0, 1.0, 1.0, 1.0], rect, transform, gl);
+        if let Some((transform, _rect)) = camera.box_renderables(viewed.get_box(), ctx) {
             let scale_factor = camera.points_per_pixel();
             let transform = transform
                 .trans_pos(self.pos * -scale_factor)
@@ -236,7 +232,7 @@ impl<S: AnimationStates> AnimationStateMachine<S> {
     }
 }
 
-impl AnimationStateMachine<StaticAnimation> {
+impl<E: HasBox> AnimationStateMachine<StaticAnimation<E>> {
     /// Creates an AnimationStateMachine that always remains on a single animation
     pub fn static_animation(animation: SpriteAnimation) -> Self {
         let mut animations = HashMap::new();
@@ -262,13 +258,24 @@ where
     fn next_state(&self, viewed: &Self::Viewed) -> Option<Self>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[derive(Derivative, Copy, Serialize, Deserialize)]
+#[derivative(Debug, Clone, PartialEq, Eq, Hash)]
 /// A set of animation states that always remains on the same state
-pub struct StaticAnimation;
+pub struct StaticAnimation<E> {
+    #[derivative(Hash = "ignore", PartialEq = "ignore", Eq(bound = ""))]
+    phantom: PhantomData<E>,
+}
 
-impl AnimationStates for StaticAnimation {
-    // TODO! make the implementation generic across Viewed types
-    type Viewed = Entity;
+impl<E> Default for StaticAnimation<E> {
+    fn default() -> Self {
+        Self {
+            phantom: PhantomData::default(),
+        }
+    }
+}
+
+impl<E: HasBox> AnimationStates for StaticAnimation<E> {
+    type Viewed = E;
 
     fn next_state(&self, _viewed: &Self::Viewed) -> Option<Self> {
         None

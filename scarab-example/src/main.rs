@@ -1,28 +1,40 @@
 use std::collections::HashMap;
 
+use debug::{DebugOptions, FieldDebug};
 use opengl_graphics::{GlGraphics, OpenGL};
 use piston::{ButtonState, EventSettings, Key, Window, WindowSettings};
-
 use scarab_engine::{
     gameobject::{
+        entity::Entity,
         field::{Cell, CellColorView, Field, FieldColorView},
-        Entity, NO_SOLIDITY, SOLID,
+        NO_SOLIDITY, SOLID,
     },
     input::{ButtonBinding, LogicalDpad, SingleButton, VirtualDpad},
     rendering::{
+        debug::StandardAndDebugView,
         registry::TextureRegistry,
         sprite::{AnimationStateMachine, SpriteAnimation},
+        Camera,
     },
-    App, Axis, Camera, GlutinWindow, HasBoxMut, LogicalSize, PhysBox, ScarabResult, Scene,
+    scene::Scene,
+    types::{
+        physbox::{HasBoxMut, PhysBox},
+        Axis,
+    },
+    App, GlutinWindow, LogicalSize, ScarabResult,
+};
+
+use self::{
+    app::ExampleApp,
+    entities::{Enemy, EntityDebug, ExampleEntities, Player, PlayerAnimations, PlayerDebug},
+    inputs::{AppInputs, GameInputs},
 };
 
 mod app;
+mod debug;
 mod entities;
 mod external_serde;
 mod inputs;
-use app::ExampleApp;
-use entities::{Enemy, ExampleEntities, Player, PlayerAnimations};
-use inputs::Inputs;
 
 const MS_PER_FRAME: f64 = 1000.0 / 15.0;
 
@@ -33,7 +45,7 @@ fn main() -> ScarabResult<()> {
         .graphics_api(opengl)
         .exit_on_esc(true)
         .build()
-        .unwrap(); // TODO! log a more readable message before panicing
+        .unwrap(); // TODO! log a more readable message before panicking
     let gl = GlGraphics::new(opengl);
     window
         .ctx
@@ -69,7 +81,10 @@ fn main() -> ScarabResult<()> {
     };
 
     // Put the field and its view in the scene
-    let mut scene = Scene::new(field, field_view);
+    let mut scene = Scene::new(
+        field,
+        StandardAndDebugView::from((field_view, FieldDebug {})),
+    );
 
     // Create a camera with a 100x100 tile view
     let cambox = PhysBox::new([0.0, 0.0, camera_size[0].into(), camera_size[1].into()])?;
@@ -146,13 +161,29 @@ fn main() -> ScarabResult<()> {
 
     let enemy2 = Enemy { entity: r };
 
-    scene.register_entity(ExampleEntities::Player((player, player_view)))?;
-    scene.register_entity(ExampleEntities::Enemy((enemy, enemy_view.clone())))?;
-    scene.register_entity(ExampleEntities::Enemy((enemy2, enemy_view)))?;
+    let box_color = [0.0, 1.0, 1.0, 1.0];
+    let health_color = [1.0, 0.0, 0.0, 1.0];
+    let cooldown_color = [0.0, 0.0, 1.0, 1.0];
+
+    let player_debug = PlayerDebug::new(box_color, health_color, cooldown_color);
+    let enemy_debug = EntityDebug::new(box_color, health_color);
+
+    scene.register_entity(ExampleEntities::Player((
+        player,
+        (player_view, player_debug).into(),
+    )))?;
+    scene.register_entity(ExampleEntities::Enemy((
+        enemy,
+        (enemy_view.clone(), enemy_debug.clone()).into(),
+    )))?;
+    scene.register_entity(ExampleEntities::Enemy((
+        enemy2,
+        (enemy_view, enemy_debug).into(),
+    )))?;
 
     // Use WASD inputs (reminder that up is negative y)
-    let mut input_registry = Inputs::new();
-    input_registry.bind_movement(
+    let mut game_input_registry = GameInputs::new();
+    game_input_registry.move_binding = Some(
         LogicalDpad::from(VirtualDpad::new(
             SingleButton::Keyboard(Key::D),
             SingleButton::Keyboard(Key::S),
@@ -161,9 +192,27 @@ fn main() -> ScarabResult<()> {
         ))
         .into(),
     );
-    input_registry.bind_attack(ButtonBinding::new(
+    game_input_registry.attack_binding = Some(ButtonBinding::new(
         ButtonState::Press,
         SingleButton::Mouse(piston::MouseButton::Left),
+    ));
+
+    let mut app_input_registry = AppInputs::default();
+    app_input_registry.toggle_debug_entity_collision_boxes = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::Z),
+    ));
+    app_input_registry.toggle_debug_entity_health = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::X),
+    ));
+    app_input_registry.toggle_debug_field_collision_boxes = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::C),
+    ));
+    app_input_registry.toggle_debug_attack_cooldowns = Some(ButtonBinding::new(
+        ButtonState::Press,
+        SingleButton::Keyboard(Key::V),
     ));
 
     // NOTE: All of the above code is reponsible for initializing the game state
@@ -179,7 +228,14 @@ fn main() -> ScarabResult<()> {
         window,
         scene,
         camera,
-        input_registry,
+        game_input_registry,
+        app_input_registry,
+        DebugOptions {
+            entity_collision_boxes: false,
+            entity_health: false,
+            field_collision_boxes: false,
+            attack_cooldowns: false,
+        },
         save_name,
         event_settings,
         texture_registry,

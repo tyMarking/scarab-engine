@@ -1,17 +1,15 @@
+use core::ops::{BitAnd, BitOr, Not};
+
+use graphics::types::Scalar;
+use serde::{Deserialize, Serialize};
+
 /// All moving/kinetic objects in a game scene
 pub mod entity;
 
 /// The setting of a game scene, determines static obstables
 pub mod field;
 
-use core::ops::{BitAnd, BitOr, Not};
-
-pub use entity::Entity;
-pub use field::{Cell, Field};
-use graphics::types::Scalar;
-use serde::{Deserialize, Serialize};
-
-use crate::BoxEdge;
+use crate::types::BoxEdge;
 
 /// Represents whether the typical entity can enter/exit a cell from each side
 ///
@@ -191,6 +189,16 @@ impl Health {
     /// The current health value
     pub fn current(&self) -> Scalar {
         self.curr
+    }
+
+    /// The maximum health
+    pub fn max(&self) -> Scalar {
+        self.max
+    }
+
+    /// The current health as a fraction of max health
+    pub fn fraction(&self) -> Scalar {
+        self.curr / self.max
     }
 }
 

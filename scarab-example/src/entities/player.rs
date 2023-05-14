@@ -1,23 +1,32 @@
+use graphics::types::Color;
 use scarab_engine::{
-    gameobject::{
-        entity::{
-            effect_helpers::{BasicAttack, Cooldown, TryAction},
-            HasEntity,
-        },
-        Entity,
+    gameobject::entity::{
+        effect_helpers::{BasicAttack, Cooldown, TryAction},
+        Entity, HasEntity,
     },
-    rendering::sprite::AnimationStates,
+    rendering::{
+        components::progress_bar::{inset_left_to_right, InsetPosition},
+        debug::DebugView,
+        sprite::AnimationStates,
+        Camera,
+    },
     scene::GameTickArgs,
-    HasBox, HasUuid, ScarabResult,
+    types::{
+        physbox::{HasBox, PhysBox},
+        HasUuid,
+    },
+    ScarabResult,
 };
 use serde::{Deserialize, Serialize};
 use shapes::Point;
 
-use super::ExampleEntities;
+use super::{EntityDebug, ExampleEntities};
+use crate::debug::DebugOptions;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Player {
     pub entity: Entity,
+    // TODO! this needs to be a proper struct a tuple is just horrendous
     attack: (TryAction, BasicAttack, f64),
 }
 
@@ -53,14 +62,18 @@ impl Player {
 
         Ok(())
     }
+
+    pub fn cooldown_fraction(&self) -> f64 {
+        f64::from(self.attack.0.cooldown) / self.attack.2
+    }
 }
 
-impl<'a, 'b: 'a> HasEntity<'a, 'b> for Player {
-    fn get_entity(&'b self) -> &'a Entity {
+impl HasEntity for Player {
+    fn get_entity(&self) -> &Entity {
         &self.entity
     }
 
-    fn get_entity_mut(&'b mut self) -> &'a mut Entity {
+    fn get_entity_mut(&mut self) -> &mut Entity {
         &mut self.entity
     }
 }
@@ -71,6 +84,12 @@ impl HasUuid for Player {
     }
 }
 
+impl HasBox for Player {
+    fn get_box(&self) -> &PhysBox {
+        self.entity.get_box()
+    }
+}
+
 #[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlayerAnimations {
     Idle,
@@ -78,10 +97,10 @@ pub enum PlayerAnimations {
 }
 
 impl AnimationStates for PlayerAnimations {
-    type Viewed = Entity;
+    type Viewed = Player;
 
     fn next_state(&self, viewed: &Self::Viewed) -> Option<Self> {
-        let next = if viewed.get_velocity().magnitude_sq() == 0.0 {
+        let next = if viewed.entity.get_velocity().magnitude_sq() == 0.0 {
             Self::Idle
         } else {
             Self::Run
@@ -92,5 +111,66 @@ impl AnimationStates for PlayerAnimations {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PlayerDebug {
+    pub entity_debug: EntityDebug<Player>,
+    pub cooldown_color: Color,
+}
+
+impl PlayerDebug {
+    pub fn new(box_color: Color, health_color: Color, cooldown_color: Color) -> Self {
+        Self {
+            entity_debug: EntityDebug::new(box_color, health_color),
+            cooldown_color,
+        }
+    }
+}
+
+impl DebugView for PlayerDebug {
+    type DebugOptions = DebugOptions;
+    type Viewed = Player;
+
+    fn render_with_info(
+        &mut self,
+        viewed: &Self::Viewed,
+        debug_options: &Self::DebugOptions,
+        args: &piston::RenderArgs,
+        camera: &Camera,
+        ctx: graphics::Context,
+        texture_registry: &scarab_engine::rendering::registry::TextureRegistry,
+        gl: &mut opengl_graphics::GlGraphics,
+    ) -> scarab_engine::error::RenderResult<()> {
+        self.entity_debug.render_with_info(
+            viewed,
+            debug_options,
+            args,
+            camera,
+            ctx,
+            texture_registry,
+            gl,
+        )?;
+
+        if let Some((transform, rect)) = camera.box_renderables(viewed.get_entity().get_box(), ctx)
+        {
+            if debug_options.attack_cooldowns {
+                graphics::rectangle(
+                    self.cooldown_color,
+                    inset_left_to_right(
+                        &rect,
+                        1.0,
+                        0.3,
+                        viewed.cooldown_fraction(),
+                        InsetPosition::Normal(0.0),
+                    ),
+                    transform,
+                    gl,
+                );
+            }
+        }
+
+        Ok(())
     }
 }

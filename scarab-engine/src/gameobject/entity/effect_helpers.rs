@@ -1,13 +1,13 @@
 use graphics::types::Scalar;
 use serde::{Deserialize, Serialize};
 
+use super::registry::RegisteredEntity;
 use crate::{
     gameobject::HasHealth,
     scene::{PendingEffect, TargetsOthers},
-    PhysBox, ScarabResult,
+    types::physbox::PhysBox,
+    ScarabResult,
 };
-
-use super::registry::RegisteredEntity;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Copy, PartialEq)]
 /// Expresses the readiness of an effect
@@ -30,6 +30,15 @@ impl Cooldown {
                     *self = Self::Ready;
                 }
             }
+        }
+    }
+}
+
+impl From<Cooldown> for f64 {
+    fn from(value: Cooldown) -> Self {
+        match value {
+            Cooldown::Ready => 0.0,
+            Cooldown::Cooling(x) => x,
         }
     }
 }

@@ -21,10 +21,15 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 vecmath = "1.0.0"
 winit = "0.24.0"
 
+[dev-dependencies]
+rand = "0.8.5"
+
 [lib]
 crate-type = ["rlib"]
 edition = "2021"
 
 [features]
 default = []
+debug-rendering = []
 effect-helpers = []
+component-rendering = []

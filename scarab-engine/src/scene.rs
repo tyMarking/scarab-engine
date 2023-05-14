@@ -7,12 +7,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     gameobject::{
-        entity::registry::{EntityRegistry, RegisteredEntity},
+        entity::registry::{EntityRegistry, RegisteredDebugEntity, RegisteredEntity},
         field::Field,
         HasSolidity,
     },
-    rendering::{registry::TextureRegistry, View},
-    Camera, HasBox, HasBoxMut, PhysBox, ScarabResult,
+    rendering::{debug::DebugView, registry::TextureRegistry, Camera, View},
+    types::physbox::{HasBox, HasBoxMut, PhysBox},
+    ScarabResult,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,7 +29,7 @@ pub struct Scene<E, V> {
 
 impl<E, V> Scene<E, V>
 where
-    E: RegisteredEntity + Debug + 'static,
+    E: RegisteredEntity + Debug,
     V: View<Viewed = Field>,
 {
     /// Initializes a new scene with the given field, field view and no entities
@@ -55,6 +56,44 @@ where
 
         for registered_entity in &mut self.entity_registry {
             registered_entity.render(args, camera, ctx, texture_registry, gl)?;
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "debug-rendering")]
+    /// Renders the scene with additional debug info
+    pub fn render_with_info<D>(
+        &mut self,
+        debug_options: &D,
+        args: &RenderArgs,
+        camera: &Camera,
+        ctx: Context,
+        texture_registry: &TextureRegistry,
+        gl: &mut GlGraphics,
+    ) -> ScarabResult<()>
+    where
+        E: RegisteredDebugEntity<DebugOptions = D>,
+        V: DebugView<Viewed = Field, DebugOptions = D>,
+    {
+        self.field_view.render_with_info(
+            &mut self.field,
+            debug_options,
+            args,
+            &camera,
+            ctx,
+            texture_registry,
+            gl,
+        )?;
+
+        for registered_entity in &mut self.entity_registry {
+            registered_entity.render_with_info(
+                debug_options,
+                args,
+                camera,
+                ctx,
+                texture_registry,
+                gl,
+            )?;
         }
         Ok(())
     }
@@ -89,7 +128,7 @@ where
 
     // TODO! Find a way to pin the return type of this to a specific type within the registry
     /// Optionally returns a mutable reference to the scene's player
-    pub fn player_mut<'e, 's: 'e>(&mut self) -> Option<&mut E::Player<'e, 's>> {
+    pub fn player_mut(&mut self) -> Option<&mut E::Player> {
         self.entity_registry.player_mut()
     }
 
